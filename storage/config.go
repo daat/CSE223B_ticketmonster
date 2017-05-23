@@ -2,8 +2,9 @@ package storage
 
 // Backend config
 type BackConfig struct {
-	Addr  string      // listen address
-	Store Storage     // the underlying storage it should use
+	PrimaryAddrs  []string      // listen address
+    BackupAddrs  []string      // listen address
+    This int
 	Ready chan<- bool // send a value when server is ready
 }
 

@@ -8,60 +8,13 @@ type client struct {
 	addr string
 }
 
-//var _ Storage = new(client)
-
-// KeyString interface
-func (self *client) Get(key string, value *string) error {
-	// connect to the server
-	conn, e := rpc.DialHTTP("tcp", self.addr)
-	if e != nil {
-		return e
-	}
-	// perform the call
-	e = conn.Call("Storage.Get", key, value)
-	if e != nil {
-		conn.Close()
-		return e
-	}
-
-	// close the connection
-	return conn.Close()
+// Creates an RPC client that connects to addr.
+func NewClient(addr string) Storage {
+	return &client{addr: addr}
 }
 
-func (self *client) Set(kv *KeyValue, succ *bool) error {
-	// connect to the server
-	conn, e := rpc.DialHTTP("tcp", self.addr)
-	if e != nil {
-		return e
-	}
-	// perform the call
-	e = conn.Call("Storage.Set", kv, succ)
-	if e != nil {
-		conn.Close()
-		return e
-	}
-
-	// close the connection
-	return conn.Close()
-
-}
-
-func (self *client) Keys(p *Pattern, list *List) error {
-	// connect to the server
-	conn, e := rpc.DialHTTP("tcp", self.addr)
-	if e != nil {
-		return e
-	}
-	// perform the call
-	e = conn.Call("Storage.Keys", p, list)
-	if e != nil {
-		conn.Close()
-		return e
-	}
-
-	// close the connection
-	return conn.Close()
-
+func NewBackupClient(addr string) CommandStorage {
+	return &client{addr: addr}
 }
 
 // KeyList interface
@@ -104,23 +57,6 @@ func (self *client) ListAppend(kv *KeyValue, succ *bool) error {
 	return conn.Close()
 }
 
-func (self *client) ListRemove(kv *KeyValue, n *int) error {
-	// connect to the server
-	conn, e := rpc.DialHTTP("tcp", self.addr)
-	if e != nil {
-		return e
-	}
-
-	// perform the call
-	e = conn.Call("Storage.ListRemove", kv, n)
-	if e != nil {
-		conn.Close()
-		return e
-	}
-
-	// close the connection
-	return conn.Close()
-}
 
 func (self *client) ListKeys(p *Pattern, list *List) error {
 	// connect to the server
@@ -163,7 +99,20 @@ func (self *client) Clock(atLeast uint64, ret *uint64) error {
 	return conn.Close()
 }
 
-func (self *client) GetTicket(useless bool, succ *bool) error {
-	// do nothing
-	return nil
+func (self *client) StartServing(id int, clock *uint64) error {
+	// connect to the server
+	conn, e := rpc.DialHTTP("tcp", self.addr)
+	if e != nil {
+		return e
+	}
+
+	// perform the call
+	e = conn.Call("CommandStorage.StartServing", id, clock)
+	if e != nil {
+		conn.Close()
+		return e
+	}
+
+	// close the connection
+	return conn.Close()
 }
