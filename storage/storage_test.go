@@ -34,7 +34,7 @@ func TestBackend(t *testing.T) {
         ne(backs[i].Serve(&storage.BackConfig{PrimaryAddrs: primaryAddrs, BackupAddrs: backupAddrs, This: i}))
     }
 
-    time.Sleep(200 * time.Millisecond)
+    time.Sleep(100 * time.Millisecond)
 
     bs := storage.BinStorageClient{Backs: primaryAddrs}
     bs.Init()
@@ -42,9 +42,21 @@ func TestBackend(t *testing.T) {
     kv := storage.KeyValue{Key: "uuu", Value: "buy 2"}
     var succ bool
     var list storage.List
-    // bin.ListGet(kv.Key, &list)
+
+    // append one get one
     ne(bin.ListAppend(&kv, &succ))
-    bin.ListGet(kv.Key, &list)
+    ne(bin.ListGet(kv.Key, &list))
     as(len(list.L) == 1)
     as(kv.Value == list.L[0])
+
+    // append one to existing list
+    ne(bin.ListAppend(&kv, &succ))
+    ne(bin.ListGet(kv.Key, &list))
+    as(len(list.L) == 2)
+    as(kv.Value == list.L[0])
+    as(kv.Value == list.L[1])
+
+    // get empty list
+    ne(bin.ListGet("empty", &list))
+    as(len(list.L) == 0)
 }

@@ -80,7 +80,7 @@ func (self *PrimaryBackend) Serve(b *BackConfig) error {
     self.statusLock.Lock()
     self.alive[self.this] = true
     self.statusLock.Unlock()
-    fmt.Printf("start %d\n", self.this)
+    // fmt.Printf("start %d\n", self.this)
     return nil
 }
 
@@ -161,7 +161,7 @@ func (self *PrimaryBackend) ListGet(key string, list *List) error {
 
 // Append a string to the list. Set succ to true when no error.
 func (self *PrimaryBackend) ListAppend(kv *KeyValue, succ *bool) error {
-    fmt.Printf("%d: ListAppend\n", self.this)
+    // fmt.Printf("%d: ListAppend\n", self.this)
     self.statusLock.Lock()
     if !self.alive[self.this] {
         self.statusLock.Unlock()
@@ -198,14 +198,14 @@ func (self *PrimaryBackend) ListAppend(kv *KeyValue, succ *bool) error {
 
     now := (self.this + 1) % len(self.clients)
     for now != self.this {
-        fmt.Printf("%d: backup%d_ListAppend\n", self.this, now)
+        // fmt.Printf("%d: backup%d_ListAppend\n", self.this, now)
         if !self.alive[now] {
             e = fmt.Errorf("not alive")
             now = (now + 1) % len(self.clients)
             continue
         }
         e = self.clients[now].ListAppend(kv, succ)
-        fmt.Printf("%d: %v\n", self.this, e)
+        // fmt.Printf("%d: %v\n", self.this, e)
         if e != nil {
             self.statusLock.Lock()
             self.alive[now] = false
