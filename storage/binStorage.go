@@ -5,8 +5,8 @@ import (
     "strconv"
 )
 
-type binStorageClient struct {
-	backs       []string                // addr of all back-end
+type BinStorageClient struct {
+	Backs       []string                // addr of all back-end
 	clients_map map[string]Storage // map from client_addr to client storage
 	clients     []Storage
 }
@@ -17,31 +17,31 @@ type mid_client struct {
 	clients  []Storage
 }
 
-func (self *binStorageClient) Init() {
+func (self *BinStorageClient) Init() {
 	// initialize map
 	self.clients_map = make(map[string]Storage)
-	self.clients = make([]Storage, 0, len(self.backs))
+	self.clients = make([]Storage, 0, len(self.Backs))
 	// initialize RPC client to Storage
-	for _, v := range self.backs {
-		cl := NewClient(v)
+	for _, v := range self.Backs {
+		cl := NewPrimaryClient(v)
 		self.clients_map[v] = cl
 		self.clients = append(self.clients, cl)
 	}
 }
 
-func (self *binStorageClient) Bin(name string) Storage {
-	// n := Hash(name) % len(self.backs)
+func (self *BinStorageClient) Bin(name string) Storage {
+	// n := Hash(name) % len(self.Backs)
 	// mid_cl := self.New_mid_client(name, n)
 	mid_cl := self.New_mid_client(name)
 	return mid_cl
 }
 
-func (self *binStorageClient) New_mid_client(name string) Storage {
-	n := Hash(name) % len(self.backs)
+func (self *BinStorageClient) New_mid_client(name string) Storage {
+	n := Hash(name) % len(self.Backs)
 
     v, e := strconv.Atoi(name) // fix a backend
     if e == nil {
-        n = v
+        n = v % len(self.Backs)
     }
 	return &mid_client{bin_name: name, clients: self.clients, n: n}
 }
@@ -116,5 +116,5 @@ func genKey(bin_name, key string) string {
 	nbin_name := Escape(bin_name)
 	nkey := Escape(key)
 
-	return nbin_name + nkey
+	return nbin_name + "::" + nkey
 }

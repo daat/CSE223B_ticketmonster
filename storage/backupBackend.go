@@ -58,7 +58,7 @@ func (self *BackupBackend) ListAppend(kv *KeyValue, succ *bool) error {
 func (self *BackupBackend) StartServing(id int, clock *uint64) error {
     self.primary.statusLock.Lock()
     self.primary.alive[id] = true
-    // fmt.Printf("%d: %d alive\n", self.this, id)
+    fmt.Printf("%d: %d alive\n", self.this, id)
     if id == (self.this - 1) % len(self.primary.alive) {
         self.primary.moveToPrimary[id] = true
     } else if id == (self.this + 1) % len(self.primary.alive) {
