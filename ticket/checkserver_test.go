@@ -1,17 +1,18 @@
 package ticket_test
 
-package tribtest
-
 import (
 	"runtime"
 	"runtime/debug"
-	"strconv"
+	"fmt"
+	//"strconv"
 	"testing"
 
-	"storage"
+	"ticketmonster/ticket"
 )
 
-func CheckServerConcur(t *testing.T, ts ticketserver) {
+
+
+func CheckServerConcur(t *testing.T, ts ticket.TicketServer) {
 	runtime.GOMAXPROCS(2)
 
 	ne := func(e error) {
@@ -20,13 +21,14 @@ func CheckServerConcur(t *testing.T, ts ticketserver) {
 			t.Fatal(e)
 		}
 	}
-
+	/*
 	er := func(e error) {
 		if e == nil {
 			debug.PrintStack()
 			t.Fatal()
 		}
 	}
+	
 
 	as := func(cond bool) {
 		if !cond {
@@ -34,11 +36,12 @@ func CheckServerConcur(t *testing.T, ts ticketserver) {
 			t.Fatal()
 		}
 	}
+	*/
 
 
 	p := func(th, n int, done chan<- bool) {
 		for i := 1; i <= n; i++ {
-			ne(ts.BuyTicket(n))
+			ne(ts.BuyTicket("u123", n))
 		}
 		done <- true
 	}
@@ -53,8 +56,8 @@ func CheckServerConcur(t *testing.T, ts ticketserver) {
 		<-done
 	}
 
-	v := 0
-	ne(ts.GetLeftTickets(&v))
-	as(v == 725) 
+	//as(ts.GetLeftTickets() == 725) 
+	v := ts.GetLeftTickets()
+	fmt.Printf("Ticket left %v\n", v)
 
 }

@@ -2,20 +2,24 @@ package ticket_test
 
 import (
 	"testing"
+	"runtime/debug"
+	"fmt"
+
 	"ticketmonster/storage"
+	"ticketmonster/ticket"
 )
 
 
 func NewBinClient(backs []string) storage.BinStorage {
-	bc := &storage.binStorageClient{backs: backs}
+	bc := &storage.BinStorageClient{Backs: backs}
 	bc.Init()
 	return bc
 }
 
 // Makes a front end that talks to backend
-func NewFront(backs []string, id string) ticketserver {
+func NewFront(backs []string, id string) ticket.TicketServer {
 	s := NewBinClient(backs)
-	ts = &ticketserver{bc: s, ticketserver_id: id}
+	ts := ticket.TicketServer{Bc: s, Ticketserver_id: id}
 	ts.Init(1000) // initialize tickets
 	return ts
 }
