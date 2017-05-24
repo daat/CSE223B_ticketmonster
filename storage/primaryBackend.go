@@ -38,7 +38,7 @@ func (self *PrimaryBackend) export(addr string) error {
 		return e
 	}
 	server := rpc.NewServer()
-	e = server.RegisterName("Storage", *self)
+	e = server.RegisterName("Storage", self)
 	if e != nil {
 		return e
 	}
@@ -62,6 +62,7 @@ func (self *PrimaryBackend) Serve(b *BackConfig) error {
     }
     self.alive = make([]bool, len(b.BackupAddrs))
     self.moveToPrimary = make([]bool, len(b.BackupAddrs))
+    self.moveToBackup = make([]bool, len(b.BackupAddrs))
     self.clients = make([]CommandStorage, 0, len(b.BackupAddrs))
     var clock uint64
     for i, v := range b.BackupAddrs {
@@ -79,6 +80,7 @@ func (self *PrimaryBackend) Serve(b *BackConfig) error {
     self.statusLock.Lock()
     self.alive[self.this] = true
     self.statusLock.Unlock()
+    // fmt.Printf("start %d\n", self.this)
     return nil
 }
 
