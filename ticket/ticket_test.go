@@ -10,22 +10,6 @@ import (
 )
 
 
-func NewBinClient(backs []string) storage.BinStorage {
-	bc := &storage.BinStorageClient{Backs: backs}
-	bc.Init()
-	return bc
-}
-
-// Makes a front end that talks to backend
-func NewFront(backs []string, id string) ticket.TicketServer {
-	s := NewBinClient(backs)
-	ts := ticket.TicketServer{Bc: s, Ticketserver_id: id}
-	out_port := fmt.Sprintf("localhost:%d", 17000)
-	ts.Init(1000, out_port) // initialize tickets: tickets, out_port
-	return ts
-}
-
-
 func TestTicket(t *testing.T) {
     n := 3
     primaryAddrs := make([]string, n)
@@ -44,7 +28,7 @@ func TestTicket(t *testing.T) {
         }
     }
 
-	tserver := NewFront(primaryAddrs, "0")
+	tserver := ticket.NewFront(primaryAddrs, "0")
 
 	CheckServerConcur(t, tserver)
 }

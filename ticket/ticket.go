@@ -24,6 +24,16 @@ type TicketServer struct{
 // TODO:
 // Read user bought ticket
 
+// Makes a front end that talks to backend
+func NewFront(backs []string, id string) TicketServer {
+	s := storage.NewBinClient(backs)
+	ts := TicketServer{Bc: s, Ticketserver_id: id}
+	out_port := fmt.Sprintf("localhost:%d", 17000)
+	ts.Init(1000, out_port) // initialize tickets: tickets, out_port
+	return ts
+}
+
+
 func (self *TicketServer) Init(n int, addr string){
 	self.tlock.Lock()
 	self.ticket_counter = n

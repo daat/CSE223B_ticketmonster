@@ -17,6 +17,13 @@ type mid_client struct {
 	clients  []Storage
 }
 
+func NewBinClient(backs []string) BinStorage {
+	bc := &BinStorageClient{Backs: backs}
+	bc.Init()
+	return bc
+}
+
+
 func (self *BinStorageClient) Init() {
 	// initialize map
 	self.clients_map = make(map[string]Storage)
