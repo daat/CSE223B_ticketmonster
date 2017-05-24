@@ -5,6 +5,9 @@ import (
 	"sync"
 	"strconv"
 	"fmt"
+	"net"
+	"net/http"
+	"net/rpc"
 	"ticketmonster/storage"
 )
 
@@ -18,27 +21,46 @@ type TicketServer struct{
 	current_sale int
 }
 
+// TODO:
+// Read user bought ticket
 
-func (self *TicketServer) Init(n int){
+func (self *TicketServer) Init(n int, addr string){
 	self.tlock.Lock()
-	defer self.tlock.Unlock()
 	self.ticket_counter = n
 	self.current_sale = 0
+	self.tlock.Unlock()
+
+	// start rpc server for client connection
+	l, e := net.Listen("tcp", addr)
+	if e != nil {
+		fmt.Errorf("TicketServer Listen error")
+		return 
+	}
+	
+	server := rpc.NewServer()
+	e = server.RegisterName("Window", self)
+	if e != nil {
+		fmt.Errorf("TicketServer RPC fail")
+		return 
+	}
+	go http.Serve(l, server)
+	
 }
 
 
-func (self *TicketServer) BuyTicket(uid string, n int) error {
+
+func (self *TicketServer) BuyTicket(in *BuyInfo, succ *bool) error {
 	self.tlock.Lock()
 	defer self.tlock.Unlock()
 
-	if n>self.ticket_counter {
-		return fmt.Errorf("do not have %q ticket left", n)
+	if in.N>self.ticket_counter {
+		return fmt.Errorf("do not have %q ticket left", in.N)
 	}
 
-	self.ticket_counter -= n
-	self.current_sale += n
+	self.ticket_counter -= in.N
+	self.current_sale += in.N
 
-	e := self.WriteToLog(uid, strconv.Itoa(n))
+	e := self.WriteToLog(in.Uid, strconv.Itoa(in.N))
 	if e != nil {
 		return e
 	}
@@ -57,11 +79,11 @@ func (self *TicketServer) WriteToLog(uid string, n string) error {
 	return nil
 }
 
-func (self *TicketServer) GetLeftTickets() int {
+func (self *TicketServer) GetLeftTickets(useless bool, n *int) error {
 	self.tlock.Lock()
-	n := self.ticket_counter
+	*n = self.ticket_counter
 	self.tlock.Unlock()
-	return n
+	return nil
 }
 
 /*
