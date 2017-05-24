@@ -17,6 +17,13 @@ type ticketserver struct{
 }
 
 
+func (self *ticketserver) Init(n int){
+	self.tlock.Lock()
+	defer self.tlock.Unlock()
+	ticket_counter = n
+	current_sale = 0
+}
+
 
 func (self *ticketserver) BuyTicket(uid string, n int) error {
 	self.tlock.Lock()
@@ -47,6 +54,14 @@ func (self *ticketserver) WriteToLog(uid string, n string) error {
 	}
 }
 
+func (self *ticketserver) GetLeftTickets(*n int) int{
+	self.tlock.Lock()
+	n = ticket_counter
+	self.tlock.Unlock()
+	return n
+}
+
+/*
 func (self *ticketserver) GetTickets(uid string) int {
 	bin := self.bc.Bin(self.ticketserver_id)
 	
@@ -129,4 +144,4 @@ func (self *ticketserver) PutToPool(n int) error {
 
 	bin.WriteBackTicket() // func to write back to public pool tickets
 }
-
+*/
