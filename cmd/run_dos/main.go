@@ -3,7 +3,6 @@ package main
 import (
 	"ticketmonster"
     "ticketmonster/ticket"
-    "ticketmonster/storage"
     "ticketmonster/client"
     "time"
     "fmt"
@@ -14,13 +13,13 @@ func main() {
     rc, _ := ticketmonster.LoadRC("bins.rc")
     var front client.Front
     front.Init(rc.TicketServers)
-
+    info := &ticket.BuyInfo{Uid: "uuu", N: 1}
     ch := make(chan int64, n)
     for i := 0; i < n; i++ {
         go func() {
             var succ bool
             t := time.Now().UnixNano()
-            e := front.BuyTicket(true, &succ)
+            e := front.BuyTicket(info, &succ)
             if e!= nil {
                 fmt.Errorf("%v %v\n", e, i)
             }

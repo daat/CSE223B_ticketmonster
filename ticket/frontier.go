@@ -9,8 +9,8 @@ type Frontier struct {
 }
 
 
-func NewFrontier(addr string) Frontier{
-	return Frontier{addr: addr}
+func NewFrontier(addr string) Window{
+	return &Frontier{addr: addr}
 }
 
 func (self *Frontier) BuyTicket(in *BuyInfo, succ *bool) error{
@@ -30,14 +30,14 @@ func (self *Frontier) BuyTicket(in *BuyInfo, succ *bool) error{
 	return conn.Close()
 }
 
-func (self *Frontier) GetLeftTickets(uid string, n *int) error{
+func (self *Frontier) GetLeftTickets(useless bool, n *int) error{
 	// connect to the server
 	conn, e := rpc.DialHTTP("tcp", self.addr)
 	if e != nil {
 		return e
 	}
 	// perform the call
-	e = conn.Call("TICKET.GetLeftTickets", uid, n)
+	e = conn.Call("TICKET.GetLeftTickets", useless, n)
 	if e != nil {
 		conn.Close()
 		return e
