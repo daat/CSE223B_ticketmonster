@@ -35,11 +35,7 @@ func (self *BackupBackend) Clock(atLeast uint64, ret *uint64) error {
 
 // Get the list.
 func (self *BackupBackend) ListGet(key string, list *List) error {
-    e := self.store.ListGet(key, list)
-    if e != nil {
-        return e
-    }
-    return nil
+    return self.store.ListGet(key, list)
 }
 
 // Append a string to the list. Set succ to true when no error.
@@ -62,12 +58,21 @@ func (self *BackupBackend) ListAppend(kv *KeyValue, succ *bool) error {
 func (self *BackupBackend) StartServing(id int, clock *uint64) error {
     self.primary.statusLock.Lock()
     self.primary.alive[id] = true
-    self.primary.migrating[id] = true
+    if id == (self.this - 1) % len(self.primary.alive) {
+        self.primary.moveToPrimary[id] = true
+    } else if id == (self.this + 1) % len(self.primary.alive) {
+        self.primary.moveToBackup[id] = true
+    }
+
     self.primary.statusLock.Unlock()
     self.store.Clock(0, clock)
     go func() {
         /*migration*/
-        self.primary.migrating[id] = false
+        if id == (self.this - 1) % len(self.primary.alive) {
+            self.primary.moveToPrimary[id] = false
+        } else if id == (self.this + 1) % len(self.primary.alive) {
+            self.primary.moveToBackup[id] = false
+        }
     }()
     return nil
 }

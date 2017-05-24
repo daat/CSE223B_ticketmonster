@@ -4,6 +4,12 @@ import (
 	"strings"
 )
 
+type Stat struct {
+    n int
+    users []string
+    counts []int
+}
+
 type KeyValue struct {
 	Key   string
 	Value string
@@ -27,22 +33,25 @@ type List struct {
 func KV(k, v string) *KeyValue { return &KeyValue{k, v} }
 
 type Storage interface {
-	// Returns an auto-incrementing clock. The returned value of each call will
-	// be unique, no smaller than atLeast, and strictly larger than the value
-	// returned last time, unless it was math.MaxUint64.
-	Clock(atLeast uint64, ret *uint64) error
-
-    // Get the list.
-	ListGet(key string, list *List) error
-
+    ListGet(key string, list *List) error
 	// Append a string to the list. Set succ to true when no error.
 	ListAppend(kv *KeyValue, succ *bool) error
 
 }
 
 type CommandStorage interface {
+    // Returns an auto-incrementing clock. The returned value of each call will
+    // be unique, no smaller than atLeast, and strictly larger than the value
+    // returned last time, unless it was math.MaxUint64.
+    Clock(atLeast uint64, ret *uint64) error
+
+    // Get the list.
+    ListGet(key string, list *List) error
+
+    ListAppend(kv *KeyValue, succ *bool) error
+
+
     StartServing(id int, clock *uint64) error
-    Storage
 }
 
 // Key-Storage interface

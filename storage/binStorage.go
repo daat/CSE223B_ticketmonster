@@ -2,7 +2,7 @@ package storage
 
 import (
 	"hash/fnv"
-	"sort"
+    "strconv"
 )
 
 type binStorageClient struct {
@@ -38,6 +38,11 @@ func (self *binStorageClient) Bin(name string) Storage {
 
 func (self *binStorageClient) New_mid_client(name string) Storage {
 	n := Hash(name) % len(self.backs)
+
+    v, e := strconv.Atoi(name) // fix a backend
+    if e == nil {
+        n = v
+    }
 	return &mid_client{bin_name: name, clients: self.clients, n: n}
 }
 
@@ -48,21 +53,35 @@ func Hash(s string) int {
 }
 
 func (self *mid_client) ListGet(key string, list *List) error {
-	logs, e := self.getLogs(key, "list")
+	encoded_key := genKey(self.bin_name, key)
 
-	if e != nil {
-		return e
-	}
+	bs := self
+	n_backs := len(bs.clients)
+	now := self.n
 
-	// convert logs to list
-	sort.Strings(logs.L)
-    list = &logs
-	return nil
+	var e error
+
+	e = bs.clients[now].ListGet(encoded_key, list)
+    if e != nil {
+        now = (now + 1) % n_backs
+    	for now != self.n {
+			e = bs.clients[now].ListGet(encoded_key, list)
+    		if e == nil {
+    			break
+    		}
+    		now = (now + 1) % n_backs
+    	}
+    }
+    if e != nil {
+        return e
+    }
+
+    return nil
 }
 
 func (self *mid_client) ListAppend(kv *KeyValue, succ *bool) error {
 	var kv2 KeyValue
-	kv2.Key = genKey(self.bin_name, kv.Key, "list")
+	kv2.Key = genKey(self.bin_name, kv.Key)
 	kv2.Value = kv.Value
 
 	bs := self
@@ -73,6 +92,7 @@ func (self *mid_client) ListAppend(kv *KeyValue, succ *bool) error {
 
 	e = bs.clients[now].ListAppend(&kv2, succ)
     if e != nil {
+        now = (now + 1) % n_backs
     	for now != self.n {
 			e = bs.clients[now].ListAppend(&kv2, succ)
     		if e == nil {
@@ -92,56 +112,9 @@ func (self *mid_client) Clock(atLeast uint64, ret *uint64) error {
 	return nil
 }
 
-func (self *mid_client) getLogs(key string, vtype string) (List, error) {
-	encoded_key := genKey(self.bin_name, key, vtype)
-
-	bs := self
-	n_backs := len(bs.clients)
-	now := self.n
-	var logs, logs2 List
-	e := bs.clients[now].ListGet(encoded_key, &logs)
-	if e != nil {
-		now = (now + 1) % n_backs
-		for now != self.n {
-			if e == nil {
-				e = bs.clients[now].ListGet(encoded_key, &logs)
-			}
-			if e == nil {
-				break
-			}
-			now = (now + 1) % n_backs
-		}
-	}
-
-	if e != nil {
-		return logs, e
-	}
-
-	now = (now + 1) % n_backs
-	for now != self.n {
-		if e == nil {
-			e = bs.clients[now].ListGet(encoded_key, &logs2)
-		}
-		if e == nil {
-			break
-		}
-		now = (now + 1) % n_backs
-	}
-
-	if len(logs2.L) > len(logs.L) {
-		return logs2, nil
-	}
-	return logs, nil
-}
-
-func genKey(bin_name, key, vtype string) string {
+func genKey(bin_name, key string) string {
 	nbin_name := Escape(bin_name)
 	nkey := Escape(key)
-	var ret string
-	if vtype == "list" {
-		ret = nbin_name + "::list_" + nkey
-	} else if vtype == "value" {
-		ret = nbin_name + "::value_" + nkey
-	}
-	return ret
+
+	return nbin_name + nkey
 }

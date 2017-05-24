@@ -8,13 +8,15 @@ import (
     "sync"
     "strings"
     "strconv"
+    "sort"
 )
 
 type PrimaryBackend struct {
     bc *BackConfig
     clients []CommandStorage
     alive []bool
-    migrating []bool
+    moveToPrimary []bool
+    moveToBackup []bool
     store Store
     backup *BackupBackend
     this int
@@ -59,7 +61,7 @@ func (self *PrimaryBackend) Serve(b *BackConfig) error {
         return e
     }
     self.alive = make([]bool, len(b.BackupAddrs))
-    self.migrating = make([]bool, len(b.BackupAddrs))
+    self.moveToPrimary = make([]bool, len(b.BackupAddrs))
     self.clients = make([]CommandStorage, 0, len(b.BackupAddrs))
     var clock uint64
     for i, v := range b.BackupAddrs {
@@ -86,6 +88,71 @@ func (self *PrimaryBackend) Clock(atLeast uint64, ret *uint64) error {
 
 // Get the list.
 func (self *PrimaryBackend) ListGet(key string, list *List) error {
+    self.statusLock.Lock()
+    if !self.alive[self.this] {
+        self.statusLock.Unlock()
+        return fmt.Errorf("not ready")
+    }
+    self.statusLock.Unlock()
+
+    var l1, l2 List
+    e := self.store.ListGet(key, &l1)
+    if e != nil {
+        return e
+    }
+
+    now := (self.this + 1) % len(self.clients)
+    for now != self.this {
+
+        if !self.alive[now] {
+            now = (now + 1) & len(self.clients)
+            e = fmt.Errorf("not alive")
+            continue
+        }
+
+        e = self.clients[now].ListGet(key, &l2)
+        if e != nil {
+            self.statusLock.Lock()
+            self.alive[now] = false
+            self.statusLock.Unlock()
+            now = (now + 1) & len(self.clients)
+            go func() {
+                /*migration*/
+            }()
+        } else {
+            break
+        }
+    }
+
+    if e != nil {
+        return e
+    }
+
+    sort.Strings(l1.L)
+    sort.Strings(l2.L)
+    if len(l1.L) == 0 {
+        list.L = l2.L
+    } else if len(l2.L) == 0 {
+        list.L = l1.L
+    } else {
+        var mc, clk uint64
+        arr := strings.SplitN(l1.L[0], ",", 2)
+        fmt.Sscanf(arr[0], "%25d", &mc)
+        logs := make([]string, 0, len(l1.L))
+        for _, log := range l2.L {
+            arr = strings.SplitN(log, ",", 2)
+            fmt.Sscanf(arr[0], "%25d", &clk)
+            if clk >= mc {
+                break
+            }
+            logs = append(logs, arr[1])
+        }
+        for _, log := range l1.L {
+            arr = strings.SplitN(log, ",", 2)
+            logs = append(logs, arr[1])
+        }
+        list.L = logs
+    }
 
     return nil
 }
@@ -103,35 +170,35 @@ func (self *PrimaryBackend) ListAppend(kv *KeyValue, succ *bool) error {
     if id != self.this {
         self.statusLock.Lock()
         if self.alive[id] {
-            if self.migrating[id] {
+            if self.moveToPrimary[id] {
                 // The original primary is up, ask client to go back
                 self.statusLock.Unlock()
                 return fmt.Errorf("prev alive")
             } else {
                 // the original primary is down
                 self.alive[id] = false
-                self.statusLock.Unlock()
+
                 go func() {
                     /*migration*/
                 }()
             }
         }
+        self.statusLock.Unlock()
     }
 
 
     var clock uint64
     self.store.Clock(clock, &clock)
     kv.Value = fmt.Sprintf("%25d,%s", clock, kv.Value)
-    e := self.store.ListAppend(kv, succ)
-    if e != nil {
-        return e
-    }
+
+    var e error
 
     now := (self.this + 1) % len(self.clients)
 
     for now != self.this {
 
         if !self.alive[now] {
+            e = fmt.Errorf("not alive")
             now = (now + 1) & len(self.clients)
             continue
         }
@@ -141,18 +208,18 @@ func (self *PrimaryBackend) ListAppend(kv *KeyValue, succ *bool) error {
             self.statusLock.Lock()
             self.alive[now] = false
             self.statusLock.Unlock()
+            now = (now + 1) & len(self.clients)
             go func() {
                 /*migration*/
             }()
+        } else {
+            break
         }
-        break
-    }
 
+    }
 
     if e != nil {
-        rn := 0
-        self.store.ListRemove(kv, &rn)
         return e
     }
-    return nil
+    return self.store.ListAppend(kv, succ)
 }
