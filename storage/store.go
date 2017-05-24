@@ -6,10 +6,7 @@ import (
 	"log"
 	"math"
 	"sync"
-	"strconv"
 	//"fmt"
-	"os"
-	"time"
 )
 
 var Logging bool
@@ -20,7 +17,6 @@ type strList []string
 type Store struct {
 	clock uint64
 
-	strs  map[string]string
 	lists map[string]*list.List
 
 	clockLock sync.Mutex
@@ -32,7 +28,6 @@ var _ Storage = new(Store)
 
 func NewStoreId(id int) *Store {
 	return &Store{
-		strs:  make(map[string]string),
 		lists: make(map[string]*list.List),
 	}
 }
@@ -42,62 +37,9 @@ func NewStore() *Store {
 
 	store := NewStoreId(0)
 
-	// initialize tickets
-	v := strconv.Itoa(5000)
-	store.strs["Count"] = v
-
 	return store
 
 }
-
-
-func (self *Store) GetTicket(useless bool, succ *bool) error{
-	self.strLock.Lock()
-	defer self.strLock.Unlock()
-
-
-	f, err := os.OpenFile("testlogfile", os.O_RDWR | os.O_CREATE | os.O_APPEND, 0666)
-	if err != nil {
-	    //
-	}
-	defer f.Close()
-
-	log.SetOutput(f)
-	start := time.Now()
-	//p := log.Print
-
-	v,err := strconv.Atoi(self.strs["Count"])
-	if err != nil{
-		return err
-	}
-
-	if v>0 {
-		self.strs["Count"] = strconv.Itoa(v-1)
-	}
-
-	/*if v== 4999{
-		now := time.Now()
-    	p(now)
-	} else if v== 3999{
-		now := time.Now()
-    	p(now)
-	} else if v== 2999{
-		now := time.Now()
-    	p(now)
-	}*/
-
-	*succ = true
-
-	if Logging {
-		log.Printf("GetTicket()")
-	}
-
-	elapsed := time.Since(start)
-	log.Printf("GetTicket %s\n", elapsed)
-
-	return nil
-}
-
 
 func (self *Store) Clock(atLeast uint64, ret *uint64) error {
 	self.clockLock.Lock()
@@ -115,62 +57,6 @@ func (self *Store) Clock(atLeast uint64, ret *uint64) error {
 
 	if Logging {
 		log.Printf("Clock(%d) => %d", atLeast, *ret)
-	}
-
-	return nil
-}
-
-func (self *Store) Get(key string, value *string) error {
-	self.strLock.Lock()
-	defer self.strLock.Unlock()
-
-	*value = self.strs[key]
-
-	if Logging {
-		log.Printf("Get(%q) => %q", key, *value)
-	}
-
-	return nil
-}
-
-func (self *Store) Set(kv *KeyValue, succ *bool) error {
-	self.strLock.Lock()
-	defer self.strLock.Unlock()
-
-	if kv.Value != "" {
-		self.strs[kv.Key] = kv.Value
-	} else {
-		delete(self.strs, kv.Key)
-	}
-
-	*succ = true
-
-	if Logging {
-		log.Printf("Set(%q, %q)", kv.Key, kv.Value)
-	}
-
-	return nil
-}
-
-func (self *Store) Keys(p *Pattern, r *List) error {
-	self.strLock.Lock()
-	defer self.strLock.Unlock()
-
-	ret := make([]string, 0, len(self.strs))
-
-	for k := range self.strs {
-		if p.Match(k) {
-			ret = append(ret, k)
-		}
-	}
-
-	r.L = ret
-
-	if Logging {
-		log.Printf("Keys(%q, %q) => %d", p.Prefix, p.Suffix, len(r.L))
-		for i, s := range r.L {
-			log.Printf("  %d: %q", i, s)
-		}
 	}
 
 	return nil
