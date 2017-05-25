@@ -14,6 +14,7 @@ import (
 type TicketServer struct{
 	Bc storage.BinStorage
 	Ticketserver_id string // '0', '1', '2' for now
+	addr string
 
 	// related variables
 	tlock sync.Mutex
@@ -25,16 +26,15 @@ type TicketServer struct{
 // Read user bought ticket
 
 // Makes a front end that talks to backend
-func NewFront(backs []string, id string) TicketServer {
+func NewTicketServer(backs []string, id string, address string) TicketServer {
 	s := storage.NewBinClient(backs)
-	ts := TicketServer{Bc: s, Ticketserver_id: id}
-	out_port := fmt.Sprintf("localhost:%d", 17000)
-	ts.Init(1000, out_port) // initialize tickets: tickets, out_port
+	ts := TicketServer{Bc: s, Ticketserver_id: id, addr: address}
+	ts.Init(1000) // initialize tickets
 	return ts
 }
 
 
-func (self *TicketServer) Init(n int, addr string){
+func (self *TicketServer) Init(n int, addr string) error {
 	self.tlock.Lock()
 	self.ticket_counter = n
 	self.current_sale = 0
@@ -43,18 +43,16 @@ func (self *TicketServer) Init(n int, addr string){
 	// start rpc server for client connection
 	l, e := net.Listen("tcp", addr)
 	if e != nil {
-		fmt.Errorf("TicketServer Listen error")
-		return 
+		return e
 	}
 	
 	server := rpc.NewServer()
 	e = server.RegisterName("Window", self)
 	if e != nil {
-		fmt.Errorf("TicketServer RPC fail")
-		return 
+		return e
 	}
 	go http.Serve(l, server)
-	
+	return nil
 }
 
 
