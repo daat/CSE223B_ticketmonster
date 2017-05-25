@@ -29,19 +29,19 @@ type TicketServer struct{
 func NewTicketServer(backs []string, id string, address string) TicketServer {
 	s := storage.NewBinClient(backs)
 	ts := TicketServer{Bc: s, Ticketserver_id: id, addr: address}
-	ts.Init(1000) // initialize tickets
+	//ts.Init(1000) // initialize tickets
 	return ts
 }
 
 
-func (self *TicketServer) Init(n int, addr string) error {
+func (self *TicketServer) Init(n int) error {
 	self.tlock.Lock()
 	self.ticket_counter = n
 	self.current_sale = 0
 	self.tlock.Unlock()
 
 	// start rpc server for client connection
-	l, e := net.Listen("tcp", addr)
+	l, e := net.Listen("tcp", self.addr)
 	if e != nil {
 		return e
 	}
