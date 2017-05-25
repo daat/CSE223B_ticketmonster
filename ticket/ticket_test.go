@@ -28,7 +28,7 @@ func TestTicket(t *testing.T) {
         }
     }
 
-	tserver := ticket.NewFront(primaryAddrs, "0")
+	tserver := ticket.NewTicketServer(primaryAddrs, "0", "localhost:17000")
 
 	CheckServerConcur(t, tserver)
 }
