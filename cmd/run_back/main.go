@@ -56,7 +56,7 @@ func main() {
 		for _, a := range args {
 			i, e := strconv.Atoi(a)
 			noError(e)
-			go run(i)
+			run(i)
 			n++
 		}
 	}
