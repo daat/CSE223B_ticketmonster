@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-    n := 10000
+    n := 1000
     rc, _ := ticketmonster.LoadRC("bins.rc")
     var front client.Front
     front.Init(rc.TicketServers)
@@ -22,7 +22,7 @@ func main() {
             t := time.Now().UnixNano()
             e := front.BuyTicket(info, &succ)
             if e!= nil {
-                fmt.Errorf("%v %v\n", e, i)
+                fmt.Println(e)
             }
             ch <- (time.Now().UnixNano() - t)
         }()

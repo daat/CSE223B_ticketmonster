@@ -20,7 +20,7 @@ func (self *Frontier) BuyTicket(in *BuyInfo, succ *bool) error{
 		return e
 	}
 	// perform the call
-	e = conn.Call("TICKET.BuyTicket", in, succ)
+	e = conn.Call("Window.BuyTicket", in, succ)
 	if e != nil {
 		conn.Close()
 		return e
@@ -37,7 +37,7 @@ func (self *Frontier) GetLeftTickets(useless bool, n *int) error{
 		return e
 	}
 	// perform the call
-	e = conn.Call("TICKET.GetLeftTickets", useless, n)
+	e = conn.Call("Window.GetLeftTickets", useless, n)
 	if e != nil {
 		conn.Close()
 		return e
