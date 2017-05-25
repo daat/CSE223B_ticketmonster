@@ -42,7 +42,7 @@ func main() {
 	n := 0
 	if len(args) == 0 {
 		// scan for addresses on this machine
-		for i, b := range rc.PrimaryBacks {
+		for i, b := range rc.TicketServers {
 			if local.Check(b) {
 				go run(i)
 				n++
