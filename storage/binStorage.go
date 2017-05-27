@@ -3,6 +3,7 @@ package storage
 import (
 	"hash/fnv"
     "strconv"
+    "fmt"
 )
 
 type BinStorageClient struct {
@@ -98,10 +99,12 @@ func (self *mid_client) ListAppend(kv *KeyValue, succ *bool) error {
 	var e error
 
 	e = bs.clients[now].ListAppend(&kv2, succ)
+    // fmt.Printf("%v %v: %v\n", kv.Key, now, e)
     if e != nil {
         now = (now + 1) % n_backs
     	for now != self.n {
 			e = bs.clients[now].ListAppend(&kv2, succ)
+            // fmt.Printf("%v %v: %v\n", kv.Key, now, e)
     		if e == nil {
     			break
     		}

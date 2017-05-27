@@ -33,7 +33,7 @@ func main() {
 			noError(fmt.Errorf("back-end index out of range: %d", i))
 		}
 		ts := ticket.NewTicketServer(rc.PrimaryBacks, strconv.Itoa(i), rc.TicketServers[i])
-		noError(ts.Init(1000))
+		noError(ts.Init(100000))
 		log.Printf("ticket server serving on %s", rc.TicketServers[i])
 	}
 
@@ -66,5 +66,3 @@ func main() {
 		select {}
 	}
 }
-
-

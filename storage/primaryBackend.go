@@ -80,7 +80,7 @@ func (self *PrimaryBackend) Serve(b *BackConfig) error {
     self.statusLock.Lock()
     self.alive[self.this] = true
     self.statusLock.Unlock()
-    // fmt.Printf("start %d\n", self.this)
+    fmt.Printf("start %d\n", self.this)
     return nil
 }
 
@@ -108,7 +108,7 @@ func (self *PrimaryBackend) ListGet(key string, list *List) error {
 
         if !self.alive[now] {
             now = (now + 1) % len(self.clients)
-            e = fmt.Errorf("not alive")
+            e = fmt.Errorf("%d: %d not alive", self.this, now)
             continue
         }
 
@@ -179,6 +179,7 @@ func (self *PrimaryBackend) ListAppend(kv *KeyValue, succ *bool) error {
                 return fmt.Errorf("prev alive")
             } else {
                 // the original primary is down
+                // fmt.Printf("%d: %d primary not alive\n", self.this, id)
                 self.alive[id] = false
 
                 go func() {
@@ -200,7 +201,8 @@ func (self *PrimaryBackend) ListAppend(kv *KeyValue, succ *bool) error {
     for now != self.this {
         // fmt.Printf("%d: backup%d_ListAppend\n", self.this, now)
         if !self.alive[now] {
-            e = fmt.Errorf("not alive")
+            e = fmt.Errorf("%d: %d not alive", self.this, now)
+            // fmt.Println(e)
             now = (now + 1) % len(self.clients)
             continue
         }
@@ -208,6 +210,8 @@ func (self *PrimaryBackend) ListAppend(kv *KeyValue, succ *bool) error {
         // fmt.Printf("%d: %v\n", self.this, e)
         if e != nil {
             self.statusLock.Lock()
+            e = fmt.Errorf("%d: %d %v", self.this, now, e)
+            // fmt.Println(e)
             self.alive[now] = false
             self.statusLock.Unlock()
             now = (now + 1) % len(self.clients)
