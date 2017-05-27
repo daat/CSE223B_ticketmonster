@@ -3,7 +3,6 @@ package storage
 import (
 	"hash/fnv"
     "strconv"
-    "fmt"
 )
 
 type BinStorageClient struct {
