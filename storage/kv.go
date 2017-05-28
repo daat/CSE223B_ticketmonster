@@ -45,13 +45,9 @@ type CommandStorage interface {
     // returned last time, unless it was math.MaxUint64.
     Clock(atLeast uint64, ret *uint64) error
 
-    // Get the list.
-    ListGet(key string, list *List) error
-
-    ListAppend(kv *KeyValue, succ *bool) error
-
-
     StartServing(id int, clock *uint64) error
+
+    Storage
 }
 
 // Key-Storage interface

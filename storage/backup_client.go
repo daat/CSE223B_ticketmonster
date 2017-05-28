@@ -4,61 +4,12 @@ import (
 	"net/rpc"
 )
 
-type primary_client struct {
-	addr string
-}
-
 type backup_client struct {
 	addr string
 }
 
-// Creates an RPC client that connects to addr.
-func NewPrimaryClient(addr string) Storage {
-	return &primary_client{addr: addr}
-}
-
 func NewBackupClient(addr string) CommandStorage {
 	return &backup_client{addr: addr}
-}
-
-// KeyList interface
-func (self *primary_client) ListGet(key string, list *List) error {
-	// connect to the server
-	conn, e := rpc.DialHTTP("tcp", self.addr)
-	if e != nil {
-		return e
-	}
-
-	list.L = nil
-	// perform the call
-	e = conn.Call("Storage.ListGet", key, list)
-	if e != nil {
-		conn.Close()
-		return e
-	}
-	if list.L == nil {
-		list.L = []string{}
-	}
-	// close the connection
-	return conn.Close()
-}
-
-func (self *primary_client) ListAppend(kv *KeyValue, succ *bool) error {
-	// connect to the server
-	conn, e := rpc.DialHTTP("tcp", self.addr)
-	if e != nil {
-		return e
-	}
-
-	// perform the call
-	e = conn.Call("Storage.ListAppend", kv, succ)
-	if e != nil {
-		conn.Close()
-		return e
-	}
-
-	// close the connection
-	return conn.Close()
 }
 
 // KeyList interface

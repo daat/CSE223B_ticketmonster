@@ -2,8 +2,6 @@ package storage
 
 import (
 	"net"
-	"net/http"
-	"net/rpc"
     "fmt"
     "sync"
     "strings"
@@ -32,19 +30,21 @@ func (self *PrimaryBackend) getID(key string) int {
     return id
 }
 
-func (self *PrimaryBackend) export(addr string) error {
-    l, e := net.Listen("tcp", addr)
-	if e != nil {
-		return e
+func (self *PrimaryBackend) export(addr string) {
+    l, ee := net.Listen("tcp", addr)
+	if ee != nil {
+        fmt.Println(ee)
+        return
 	}
-	server := rpc.NewServer()
-	e = server.RegisterName("Storage", self)
-	if e != nil {
-		return e
-	}
-
-	go http.Serve(l, server)
-    return nil
+	for {
+        conn, e := l.Accept()
+        if e != nil {
+            fmt.Println(e)
+            return
+        }
+        demux := ConnDemux{Conn: conn, Server: self}
+        go demux.Serve()
+    }
 }
 
 // Serve as a backend based on the given configuration
@@ -52,11 +52,9 @@ func (self *PrimaryBackend) Serve(b *BackConfig) error {
     self.store = *NewStore()
     self.this = b.This
     self.backup = &BackupBackend{store: self.store, primary: self, this: self.this}
-	e := self.export(b.PrimaryAddrs[b.This])
-    if e != nil {
-        return e
-    }
-    e = self.backup.export(b.BackupAddrs[b.This])
+
+	go self.export(b.PrimaryAddrs[b.This])
+    e := self.backup.export(b.BackupAddrs[b.This])
     if e != nil {
         return e
     }
@@ -82,6 +80,20 @@ func (self *PrimaryBackend) Serve(b *BackConfig) error {
     self.statusLock.Unlock()
     fmt.Printf("start %d\n", self.this)
     return nil
+}
+
+func (self *PrimaryBackend) Handle(req *Request) *Response {
+    res := Response{}
+    var e error
+    if req.OP == "ListAppend" {
+        e = self.ListAppend(req.KV, &res.Succ)
+    } else {
+        e = fmt.Errorf("no this operation")
+    }
+    if e != nil {
+        res.Err = e.Error()
+    }
+    return &res
 }
 
 func (self *PrimaryBackend) Clock(atLeast uint64, ret *uint64) error {
