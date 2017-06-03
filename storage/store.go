@@ -189,9 +189,17 @@ func (self *Store) AccessPool(kv *KeyValue, list *List) error {
 		self.lists[kv.Key] = lst
 	}
 
-	val := lst.Back().Value.(string)
-	last_log := strings.Split(val, ",")
-	total,_ := strconv.Atoi(last_log[3])
+    // get last log
+    total := 0
+    var mc, c uint64
+    for i := lst.Front(); i != nil; i = i.Next() {
+        arr := strings.Split(i.Value.(string), ",")
+        fmt.Sscanf(arr[0], "%25d", &c)
+        if c > mc {
+            mc = c
+            total, _ = strconv.Atoi(arr[3])
+        }
+    }
 
 	access := strings.Split(kv.Value, ",")
     clock := access[0]
