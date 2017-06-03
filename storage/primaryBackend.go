@@ -173,7 +173,7 @@ func (self *PrimaryBackend) ListGet(key string, list *List) error {
 
 // Append a string to the list. Set succ to true when no error.
 func (self *PrimaryBackend) ListAppend(kv *KeyValue, succ *bool) error {
-    // fmt.Printf("%d: ListAppend\n", self.this)
+    // if this server hasn't notified others, it is seemed failed.
     self.statusLock.Lock()
     if !self.alive[self.this] {
         self.statusLock.Unlock()
@@ -211,19 +211,15 @@ func (self *PrimaryBackend) ListAppend(kv *KeyValue, succ *bool) error {
 
     now := (self.this + 1) % len(self.clients)
     for now != self.this {
-        // fmt.Printf("%d: backup%d_ListAppend\n", self.this, now)
         if !self.alive[now] {
             e = fmt.Errorf("%d: %d not alive", self.this, now)
-            // fmt.Println(e)
             now = (now + 1) % len(self.clients)
             continue
         }
         e = self.clients[now].ListAppend(kv, succ)
-        // fmt.Printf("%d: %v\n", self.this, e)
         if e != nil {
             self.statusLock.Lock()
             e = fmt.Errorf("%d: %d %v", self.this, now, e)
-            // fmt.Println(e)
             self.alive[now] = false
             self.statusLock.Unlock()
             now = (now + 1) % len(self.clients)
