@@ -87,6 +87,10 @@ func (self *PrimaryBackend) Handle(req *Request) *Response {
     var e error
     if req.OP == "ListAppend" {
         e = self.ListAppend(req.KV, &res.Succ)
+    } else if req.OP == "ListGet" {
+        e = self.ListGet(req.KV.Key, &res.L)
+    } else if req.OP == "AccessPool" {
+        e = self.AccessPool(req.KV, &res.L)
     } else {
         e = fmt.Errorf("no this operation")
     }
@@ -96,21 +100,79 @@ func (self *PrimaryBackend) Handle(req *Request) *Response {
     return &res
 }
 
-func (self *PrimaryBackend) Clock(atLeast uint64, ret *uint64) error {
-    return self.store.Clock(atLeast, ret)
-}
-
-// Get the list.
-func (self *PrimaryBackend) ListGet(key string, list *List) error {
+func (self *PrimaryBackend) isReady() error {
+    // if this server hasn't notified others, it is seemed failed.
     self.statusLock.Lock()
     if !self.alive[self.this] {
         self.statusLock.Unlock()
         return fmt.Errorf("not ready")
     }
     self.statusLock.Unlock()
+    return nil
+}
+
+func (self *PrimaryBackend) updatePreServerStatus(key string) error {
+    id := self.getID(key)
+    if id != self.this {
+        self.statusLock.Lock()
+        if self.alive[id] {
+            if self.moveToPrimary[id] {
+                // The original primary is up, ask client to go back
+                self.statusLock.Unlock()
+                return fmt.Errorf("prev alive")
+            } else {
+                // the original primary is down
+                // fmt.Printf("%d: %d primary not alive\n", self.this, id)
+                self.alive[id] = false
+
+                go func() {
+                    /*migration*/
+                }()
+            }
+        }
+        self.statusLock.Unlock()
+    }
+    return nil
+}
+
+func (self *PrimaryBackend) sendBackup(kv *KeyValue, succ *bool) error {
+    var e error = nil
+    now := (self.this + 1) % len(self.clients)
+    for now != self.this {
+        if !self.alive[now] {
+            e = fmt.Errorf("%d: %d not alive", self.this, now)
+            now = (now + 1) % len(self.clients)
+            continue
+        }
+        e = self.clients[now].ListAppend(kv, succ)
+        if e != nil {
+            self.statusLock.Lock()
+            e = fmt.Errorf("%d: %d %v", self.this, now, e)
+            self.alive[now] = false
+            self.statusLock.Unlock()
+            now = (now + 1) % len(self.clients)
+            go func() {
+                /*migration*/
+            }()
+        } else {
+            break
+        }
+
+    }
+
+    return e
+}
+
+// Get the list.
+func (self *PrimaryBackend) ListGet(key string, list *List) error {
+
+    e := self.isReady()
+    if e != nil {
+        return e
+    }
 
     var l1, l2 List
-    e := self.store.ListGet(key, &l1)
+    e = self.store.ListGet(key, &l1)
     if e != nil {
         return e
     }
@@ -173,67 +235,55 @@ func (self *PrimaryBackend) ListGet(key string, list *List) error {
 
 // Append a string to the list. Set succ to true when no error.
 func (self *PrimaryBackend) ListAppend(kv *KeyValue, succ *bool) error {
-    // if this server hasn't notified others, it is seemed failed.
-    self.statusLock.Lock()
-    if !self.alive[self.this] {
-        self.statusLock.Unlock()
-        return fmt.Errorf("not ready")
-    }
-    self.statusLock.Unlock()
 
-    id := self.getID(kv.Key)
-    if id != self.this {
-        self.statusLock.Lock()
-        if self.alive[id] {
-            if self.moveToPrimary[id] {
-                // The original primary is up, ask client to go back
-                self.statusLock.Unlock()
-                return fmt.Errorf("prev alive")
-            } else {
-                // the original primary is down
-                // fmt.Printf("%d: %d primary not alive\n", self.this, id)
-                self.alive[id] = false
-
-                go func() {
-                    /*migration*/
-                }()
-            }
-        }
-        self.statusLock.Unlock()
+    e := self.isReady()
+    if e != nil {
+        return e
     }
 
+    e = self.updatePreServerStatus(kv.Key)
+    if e != nil {
+        return e
+    }
 
     var clock uint64
     self.store.Clock(clock, &clock)
     kv.Value = fmt.Sprintf("%25d,%s", clock, kv.Value)
 
-    var e error
-
-    now := (self.this + 1) % len(self.clients)
-    for now != self.this {
-        if !self.alive[now] {
-            e = fmt.Errorf("%d: %d not alive", self.this, now)
-            now = (now + 1) % len(self.clients)
-            continue
-        }
-        e = self.clients[now].ListAppend(kv, succ)
-        if e != nil {
-            self.statusLock.Lock()
-            e = fmt.Errorf("%d: %d %v", self.this, now, e)
-            self.alive[now] = false
-            self.statusLock.Unlock()
-            now = (now + 1) % len(self.clients)
-            go func() {
-                /*migration*/
-            }()
-        } else {
-            break
-        }
-
-    }
-
+    e = self.sendBackup(kv, succ)
     if e != nil {
         return e
     }
     return self.store.ListAppend(kv, succ)
+}
+
+func (self *PrimaryBackend) AccessPool(kv *KeyValue, list *List) error {
+    e := self.isReady()
+    if e != nil {
+        return e
+    }
+
+    e = self.updatePreServerStatus(kv.Key)
+    if e != nil {
+        return e
+    }
+
+    var clock uint64
+    self.store.Clock(clock, &clock)
+    kv.Value = fmt.Sprintf("%25d,%s", clock, kv.Value)
+
+    e = self.store.AccessPool(kv, list)
+    if e != nil {
+        return e
+    }
+    kv.Value = list.L[0]
+    var succ bool
+    e = self.sendBackup(kv, &succ)
+    if e != nil {
+        n := 0
+        self.store.ListRemove(kv, &n)
+        return e
+    }
+
+    return nil
 }

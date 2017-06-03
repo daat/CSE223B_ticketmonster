@@ -43,6 +43,10 @@ func NewStore() *Store {
 
 }
 
+func newList() *list.List {
+    return list.New()
+}
+
 func (self *Store) Clock(atLeast uint64, ret *uint64) error {
 	self.clockLock.Lock()
 	defer self.clockLock.Unlock()
@@ -168,44 +172,46 @@ func (self *Store) ListRemove(kv *KeyValue, n *int) error {
 
 // public pool kv pair
 // key: TICKETPOOL
-// value: (PUT/GET),number
+// value: clock,(PUT/GET),number
 
-// TICKETPOOL List log: (PUT/GET), number, total
-func (self *Store) AccessPool(kv *KeyValue, succ *bool) error {
+// TICKETPOOL List log: clock, (PUT/GET), number, total
+func (self *Store) AccessPool(kv *KeyValue, list *List) error {
 	self.listLock.Lock()
 	defer self.listLock.Unlock()
 
-	if kv.Key != "TICKETPOOL" {
-		return nil
-	}
+	// if kv.Key != "TICKETPOOL" {
+	// 	return fmt.Errorf("AccessPoolDenied: not TICKETPOOL")
+	// }
 
 	lst, found := self.lists[kv.Key]
 	if !found {
-		lst = list.New()
+		lst = newList()
 		self.lists[kv.Key] = lst
 	}
 
 	val := lst.Back().Value.(string)
 	last_log := strings.Split(val, ",")
-	total,_ := strconv.Atoi(last_log[2])
+	total,_ := strconv.Atoi(last_log[3])
 
 	access := strings.Split(kv.Value, ",")
-	if access[0] != "PUT" || access[1]!="GET"{
-		return nil
+    clock := access[0]
+	op := access[1]
+	num,_ := strconv.Atoi(access[2])
+	if op != "PUT" && op !="GET"{
+		return fmt.Errorf("AccessPoolDenied: wrong operation: %s", access[1])
 	}
 
-	op := access[0]
-	num,_ := strconv.Atoi(access[1])
-
-	var s string 
+	var s string
 	if op == "PUT" {
 		s = fmt.Sprintf("%s,%d", kv.Value, total+num)
 	} else if total > num {
 		s = fmt.Sprintf("%s,%d", kv.Value, total-num)
-	}
+	} else {
+        s = fmt.Sprintf("%s,%s,%d,%d", clock, op, total, 0)
+    }
 	lst.PushBack(s)
 
-	*succ = true
+	list.L = []string{s}
 
 	if Logging {
 		log.Printf("AccessPool(%q)", s)

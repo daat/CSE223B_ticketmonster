@@ -6,6 +6,7 @@ import (
 	"ticketmonster/storage"
     "fmt"
     "time"
+    "strings"
 )
 
 func TestBackend(t *testing.T) {
@@ -59,4 +60,14 @@ func TestBackend(t *testing.T) {
     // get empty list
     ne(bin.ListGet("empty", &list))
     as(len(list.L) == 0)
+
+    // init pool
+    kv = storage.KeyValue{Key: "TICKETPOOL", Value: "PUT,1000,1000"}
+    ne(bin.ListAppend(&kv, &succ))
+
+    // get pool
+    kv = storage.KeyValue{Key: "TICKETPOOL", Value: "GET,100"}
+    ne(bin.AccessPool(&kv, &list))
+    as(strings.Split(list.L[0], ",")[3] == "900")
+
 }

@@ -35,6 +35,12 @@ func (self *primary_client) init() error {
 
 // KeyList interface
 func (self *primary_client) ListGet(key string, list *List) error {
+    req := Request{OP: "ListGet", KV: &KeyValue{Key: key, Value: ""}}
+    res := self.mux.Handle(&req)
+    if res.Err != "" {
+        return fmt.Errorf(res.Err)
+    }
+    list.L = res.L.L
 	return nil
 }
 
@@ -48,5 +54,18 @@ func (self *primary_client) ListAppend(kv *KeyValue, succ *bool) error {
         return fmt.Errorf(res.Err)
     }
     *succ = res.Succ
+	return nil
+}
+
+func (self *primary_client) AccessPool(kv *KeyValue, list *List) error {
+
+	// perform the call
+
+    req := Request{OP: "AccessPool", KV: kv}
+    res := self.mux.Handle(&req)
+    if res.Err != "" {
+        return fmt.Errorf(res.Err)
+    }
+    list.L = res.L.L
 	return nil
 }

@@ -37,17 +37,20 @@ type Storage interface {
 	// Append a string to the list. Set succ to true when no error.
 	ListAppend(kv *KeyValue, succ *bool) error
 
+    AccessPool(kv *KeyValue, list *List) error
+
 }
 
 type CommandStorage interface {
     // Returns an auto-incrementing clock. The returned value of each call will
     // be unique, no smaller than atLeast, and strictly larger than the value
     // returned last time, unless it was math.MaxUint64.
-    Clock(atLeast uint64, ret *uint64) error
 
     StartServing(id int, clock *uint64) error
 
-    Storage
+    ListGet(key string, list *List) error
+	// Append a string to the list. Set succ to true when no error.
+	ListAppend(kv *KeyValue, succ *bool) error
 }
 
 // Key-Storage interface

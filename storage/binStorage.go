@@ -3,6 +3,7 @@ package storage
 import (
 	"hash/fnv"
     "strconv"
+    "strings"
 )
 
 type BinStorageClient struct {
@@ -103,6 +104,42 @@ func (self *mid_client) ListAppend(kv *KeyValue, succ *bool) error {
         now = (now + 1) % n_backs
     	for now != self.n {
 			e = bs.clients[now].ListAppend(&kv2, succ)
+            // fmt.Printf("%v %v: %v\n", kv.Key, now, e)
+    		if e == nil {
+    			break
+    		}
+    		now = (now + 1) % n_backs
+    	}
+    }
+    if e != nil {
+        return e
+    }
+
+    return nil
+}
+
+func (self *mid_client) AccessPool(kv *KeyValue, list *List) error {
+	var kv2 KeyValue
+	kv2.Key = genKey(self.bin_name, kv.Key)
+	kv2.Value = kv.Value
+
+	bs := self
+	n_backs := len(bs.clients)
+	now := self.n
+
+	var e error
+	e = bs.clients[now].AccessPool(&kv2, list)
+    if e != nil && strings.HasPrefix(e.Error(), "AccessPoolDenied") {
+        return e
+    }
+    // fmt.Printf("%v %v: %v\n", kv.Key, now, e)
+    if e != nil {
+        now = (now + 1) % n_backs
+    	for now != self.n {
+			e = bs.clients[now].AccessPool(&kv2, list)
+            if strings.HasPrefix(e.Error(), "AccessPoolDenied") {
+                return e
+            }
             // fmt.Printf("%v %v: %v\n", kv.Key, now, e)
     		if e == nil {
     			break
