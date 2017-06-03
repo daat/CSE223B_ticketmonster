@@ -4,16 +4,35 @@ package ticket
 import (
 	"sync"
 	"strconv"
+	"strings"
 	"fmt"
 	"net"
 	"net/http"
 	"net/rpc"
+	"time"
 	"ticketmonster/storage"
 )
 
+type TicketServerConfig struct {
+	// The addresses of back-ends
+	Backs []string
+
+	// The address for outside connection
+	OutAddr string
+
+	// The inside addresses of TicketServers
+	InAddrs []string
+
+	// The index of this ticketserver
+	This int
+
+	// TicketServer Id ('0', '1', '2')
+	Id string
+}
+
 type TicketServer struct{
+	tc *TicketServerConfig
 	Bc storage.BinStorage
-	Ticketserver_id string // '0', '1', '2' for now
 	addr string
 
 	// related variables
@@ -26,10 +45,9 @@ type TicketServer struct{
 // Read user bought ticket
 
 // Makes a front end that talks to backend
-func NewTicketServer(backs []string, id string, address string) TicketServer {
-	s := storage.NewBinClient(backs)
-	ts := TicketServer{Bc: s, Ticketserver_id: id, addr: address}
-	//ts.Init(1000) // initialize tickets
+func NewTicketServer(config *TicketServerConfig) TicketServer {
+	s := storage.NewBinClient(config.Backs)
+	ts := TicketServer{Bc: s, tc: config}
 	return ts
 }
 
@@ -41,7 +59,7 @@ func (self *TicketServer) Init(n int) error {
 	self.tlock.Unlock()
 
 	// start rpc server for client connection
-	l, e := net.Listen("tcp", self.addr)
+	l, e := net.Listen("tcp", self.tc.OutAddr)
 	if e != nil {
 		return e
 	}
@@ -52,6 +70,7 @@ func (self *TicketServer) Init(n int) error {
 		return e
 	}
 	go http.Serve(l, server)
+	go self.UpdateTicketCounter()
 	return nil
 }
 
@@ -77,7 +96,7 @@ func (self *TicketServer) BuyTicket(in *BuyInfo, succ *bool) error {
 }
 
 func (self *TicketServer) WriteToLog(uid string, n string) error {
-	bin := self.Bc.Bin(self.Ticketserver_id)
+	bin := self.Bc.Bin(self.tc.Id)
 	var succ bool
 	succ = false
 	bin.ListAppend(&storage.KeyValue{Key: uid, Value: n}, &succ)
@@ -94,83 +113,47 @@ func (self *TicketServer) GetLeftTickets(useless bool, n *int) error {
 	return nil
 }
 
-/*
 
-func (self *TicketServer) ListenForToken(token_chan chan bool, exit chan bool){
-	for {
-		c, err := self.listener.Accept()
-		if err != nil {
-			// handle error (and then for example indicate acceptor is down)
-			exit <- true
-			break
-		}
-		// receive token
-
-		token_chan <- true
-		c.Close()
-	}
-	return 
-}
-
-func (self *TicketServer) MonitorSale() error {
-	token_chan := make(chan bool)
-	listen_exit := make(chan bool)
-
-	go self.ListenForToken(token_chan, listen_exit)
-
-	tick_chan := time.NewTicker(time.Millisecond * 100).C // freq to be adjust
-
+func (self *TicketServer) UpdateTicketCounter() {
+	tick_chan := time.NewTicker(time.Minute*2).C // freq to be adjust
 	for {
 		select {
-		case <- listen_exit:
-			exit <- true
-			return nil
-		case <- token_chan:
-			self.tlock.Lock()
-			c := current_sale 
-			t := ticket_counter
-			current_sale = 0
-			self.tlock.Unlock()
-
-			if t < c {
-				self.GetFromPool(c/2) // can change this 
-			} else if t > c {
-				self.PutToPool(c/2)
-			}
-		}
 		case <- tick_chan:
 			self.tlock.Lock()
-			current_sale = 0
+			c := self.current_sale 
+			t := self.ticket_counter
+			self.current_sale = 0
 			self.tlock.Unlock()
+
+			bin := self.Bc.Bin("TICKETPOOL")
+			var l storage.List
+			if t < c {
+				e := bin.AccessPool(&storage.KeyValue{Key: "GET", Value: strconv.Itoa(c/2)}, &l) 
+				if e!=nil {
+					continue
+				}
+				
+				// update ticket counter
+				ret := strings.Split(l.L[0], ",")
+				n,_ := strconv.Atoi(ret[2])
+				self.tlock.Lock()
+				self.ticket_counter += n
+				self.tlock.Unlock()
+			
+			} else if t > c {
+				e := bin.AccessPool(&storage.KeyValue{Key: "PUT", Value: strconv.Itoa(t/2)}, &l)
+				if e!=nil {
+					continue
+				}
+
+				// update ticket counter
+				ret := strings.Split(l.L[0], ",")
+				n,_ := strconv.Atoi(ret[2])
+				self.tlock.Lock()
+				self.ticket_counter -= n
+				self.tlock.Unlock()
+
+			}
+		}
 	}
 }
-
-func (self *TicketServer) GetFromPool(n int) error {
-	bin := self.Bc.Bin("TicketPool")
-	v := bin.ReadTicket() // func to read public pool tickets
-	getticket := 0
-	if n <= v {
-		getticket = n
-	} else {
-		getticket = v
-	}
-
-	self.tlock.Lock()
-	ticket_counter = ticket_counter + getticket
-	//write to log
-	self.tlock.Unlock()
-
-	bin.WriteBackTicket() // func to write back to public pool tickets
-}
-
-func (self *TicketServer) PutToPool(n int) error {
-	bin := self.Bc.Bin("TicketPool")
-
-	self.tlock.Lock()
-	ticket_counter = ticket_counter - n
-	//write to log
-	self.tlock.Unlock()
-
-	bin.WriteBackTicket() // func to write back to public pool tickets
-}
-*/

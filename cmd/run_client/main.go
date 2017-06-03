@@ -13,7 +13,7 @@ func main() {
     n := 1000
     rc, _ := ticketmonster.LoadRC("bins.rc")
     var front client.Front
-    front.Init(rc.TicketServers)
+    front.Init(rc.TicketServers_out)
     bc := storage.NewBinClient(rc.PrimaryBacks)
     bin := bc.Bin("0")
     info := &ticket.BuyInfo{Uid: "uuu", N: 1}
