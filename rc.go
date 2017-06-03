@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
+	"ticketmonster/ticket"
 )
 
 var DefaultRCPath = "bins.rc"
@@ -11,7 +13,8 @@ var DefaultRCPath = "bins.rc"
 type RC struct {
 	PrimaryBacks   []string
     BackupBacks []string
-	TicketServers []string
+	TicketServers_out []string
+	TicketServers_in []string
 }
 
 func (self *RC) BackCount() int {
@@ -67,4 +70,20 @@ func (self *RC) Save(p string) error {
 func (self *RC) String() string {
 	b := self.marshal()
 	return string(b)
+}
+
+
+func (self *RC) TSConfig(i int) *ticket.TicketServerConfig {
+	if i >= len(self.TicketServers_out) {
+		panic("keeper index out of range")
+	}
+
+	ret := new(ticket.TicketServerConfig)
+	ret.Backs = self.PrimaryBacks
+	ret.OutAddr = self.TicketServers_out[i]
+	ret.InAddrs = self.TicketServers_in
+	ret.This = i
+	ret.Id = strconv.Itoa(i)
+
+	return ret
 }

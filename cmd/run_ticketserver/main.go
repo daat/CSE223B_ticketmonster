@@ -32,9 +32,10 @@ func main() {
 		if i > len(rc.PrimaryBacks) {
 			noError(fmt.Errorf("back-end index out of range: %d", i))
 		}
-		ts := ticket.NewTicketServer(rc.PrimaryBacks, strconv.Itoa(i), rc.TicketServers[i])
+		tsConfig := rc.TSConfig(i)
+		ts := ticket.NewTicketServer(tsConfig)
 		noError(ts.Init(100000))
-		log.Printf("ticket server serving on %s", rc.TicketServers[i])
+		log.Printf("ticket server serving on %s", rc.TicketServers_out[i])
 	}
 
 	args := flag.Args()
@@ -42,7 +43,7 @@ func main() {
 	n := 0
 	if len(args) == 0 {
 		// scan for addresses on this machine
-		for i, b := range rc.TicketServers {
+		for i, b := range rc.TicketServers_out {
 			if local.Check(b) {
 				go run(i)
 				n++
