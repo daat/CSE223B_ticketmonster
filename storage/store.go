@@ -6,7 +6,9 @@ import (
 	"log"
 	"math"
 	"sync"
-	//"fmt"
+	"strings"
+	"strconv"
+	"fmt"
 )
 
 var Logging bool
@@ -162,4 +164,53 @@ func (self *Store) ListRemove(kv *KeyValue, n *int) error {
 	}
 
 	return nil
+}
+
+// public pool kv pair
+// key: TICKETPOOL
+// value: (PUT/GET),number
+
+// TICKETPOOL List log: (PUT/GET), number, total
+func (self *Store) AccessPool(kv *KeyValue, succ *bool) error {
+	self.listLock.Lock()
+	defer self.listLock.Unlock()
+
+	if kv.Key != "TICKETPOOL" {
+		return nil
+	}
+
+	lst, found := self.lists[kv.Key]
+	if !found {
+		lst = list.New()
+		self.lists[kv.Key] = lst
+	}
+
+	val := lst.Back().Value.(string)
+	last_log := strings.Split(val, ",")
+	total,_ := strconv.Atoi(last_log[2])
+
+	access := strings.Split(kv.Value, ",")
+	if access[0] != "PUT" || access[1]!="GET"{
+		return nil
+	}
+
+	op := access[0]
+	num,_ := strconv.Atoi(access[1])
+
+	var s string 
+	if op == "PUT" {
+		s = fmt.Sprintf("%s,%d", kv.Value, total+num)
+	} else if total > num {
+		s = fmt.Sprintf("%s,%d", kv.Value, total-num)
+	}
+	lst.PushBack(s)
+
+	*succ = true
+
+	if Logging {
+		log.Printf("AccessPool(%q)", s)
+	}
+
+	return nil
+
 }
