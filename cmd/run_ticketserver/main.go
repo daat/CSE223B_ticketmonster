@@ -51,7 +51,7 @@ func main() {
 		}
 
 		if n == 0 {
-			log.Fatal("no back-end found for this host")
+			log.Fatal("no ticketserver found for this host")
 		}
 	} else {
 		// scan for indices for the addresses

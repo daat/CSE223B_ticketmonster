@@ -33,7 +33,12 @@ type TicketServerConfig struct {
 type TicketServer struct{
 	tc *TicketServerConfig
 	Bc storage.BinStorage
-	addr string
+	listener    net.Listener
+	my_iaddr string
+
+	// record other ticektserver state
+	ts_counts_map map[string]int
+	ts_states_map map[string]bool
 
 	// related variables
 	tlock sync.Mutex
@@ -58,8 +63,23 @@ func (self *TicketServer) Init(n int) error {
 	self.current_sale = 0
 	self.tlock.Unlock()
 
+	self.ts_counts_map = make(map[string]int)
+	self.ts_states_map = make(map[string]bool)
+	for _, v := range self.tc.Backs {
+		self.ts_counts_map[v] = 0
+		self.ts_states_map[v] = true
+	}
+
+	// start listening for inside connection
+	self.my_iaddr = self.tc.InAddrs[self.tc.This]
+	l, e := net.Listen("tcp", self.my_iaddr)
+	if e != nil {
+		return e
+	}
+	self.listener = l
+
 	// start rpc server for client connection
-	l, e := net.Listen("tcp", self.tc.OutAddr)
+	l, e = net.Listen("tcp", self.tc.OutAddr)
 	if e != nil {
 		return e
 	}
@@ -74,6 +94,16 @@ func (self *TicketServer) Init(n int) error {
 	return nil
 }
 
+func (self *TicketServer) InitPool() {
+	bin := self.Bc.Bin(self.tc.Id)
+	var succ bool
+	succ = false
+	bin.ListAppend(&storage.KeyValue{Key: "TICKETPOOL", Value: "PUT,1000,1000"}, &succ)
+	if succ == false{
+		fmt.Printf("InitPool fail\n")
+	}
+}
+
 
 
 func (self *TicketServer) BuyTicket(in *BuyInfo, succ *bool) error {
@@ -86,6 +116,8 @@ func (self *TicketServer) BuyTicket(in *BuyInfo, succ *bool) error {
 
 	self.ticket_counter -= in.N
 	self.current_sale += in.N
+
+	fmt.Printf("Buy %v\n", in.N)
 
 	e := self.WriteToLog(in.Uid, strconv.Itoa(in.N))
 	if e != nil {
@@ -107,15 +139,95 @@ func (self *TicketServer) WriteToLog(uid string, n string) error {
 }
 
 func (self *TicketServer) GetLeftTickets(useless bool, n *int) error {
+	p := fmt.Println
 	self.tlock.Lock()
+	t := self.ticket_counter
 	*n = self.ticket_counter
 	self.tlock.Unlock()
+	p(time.Now())
+	fmt.Printf("GetTickets %d\n", t)
 	return nil
+}
+
+/*
+func (self *TicketServer) HeartBeat(exit chan bool){
+	listen_exit := make(chan bool)
+	go self.listen_func(listen_exit)
+
+	t := time.NewTicker(time.Second) // freq to be adjust
+
+	for {
+		select {
+		case <-listen_exit:
+			exit <- true
+			return
+		default:
+			for _, v := range self.tc.InAddrs {
+				conn, e := net.Dial("tcp", v)
+				if e != nil {
+					// ticket server v fail, do recovery
+					// ...
+					continue
+				}
+				self.ts_states_map[v] = false
+				conn.Write([]byte("beep"))
+				// wait for 0.5 second
+				time.Sleep(250 * time.Millisecond)
+				if self.ts_states_map[v] == false {
+					// ticket server v fail, do recovery
+					// ...
+				}
+
+				conn.Close()
+			}
+			<-t.C
+		}
+
+	}
+}
+*/
+
+func (self *TicketServer) listen_func(exit chan bool) {
+	for {
+		conn, err := self.listener.Accept()
+		if err != nil {
+			// handle error (and then for example indicate acceptor is down)
+			exit <- true
+			break
+		}
+
+    	buffer := make([]byte, 256)
+    	n, err := conn.Read(buffer)
+    	if err!=nil{
+    		conn.Close()
+    		continue
+    	}
+
+    	if string(buffer[:n]) == "beep" {
+    		words := fmt.Sprintf("%s,%d", self.tc.Id, self.ticket_counter)
+    		conn.Write([]byte(words))  
+    	} else {
+    		info := strings.Split(string(buffer[:n]), ",")
+    		if len(info)!=2 {
+    			conn.Close()
+    			continue
+    		}
+
+    		num,_ := strconv.Atoi(info[1])
+    		self.ts_counts_map[info[0]] = num
+    		self.ts_states_map[info[0]] = true
+
+    	}
+
+		conn.Close()
+	}
 }
 
 
 func (self *TicketServer) UpdateTicketCounter() {
-	tick_chan := time.NewTicker(time.Minute*2).C // freq to be adjust
+	tick_chan := time.NewTicker(time.Second * 30).C // freq to be adjust
+	p := fmt.Println
+
 	for {
 		select {
 		case <- tick_chan:
@@ -125,10 +237,12 @@ func (self *TicketServer) UpdateTicketCounter() {
 			self.current_sale = 0
 			self.tlock.Unlock()
 
-			bin := self.Bc.Bin("TICKETPOOL")
+			bin := self.Bc.Bin(self.tc.Id)
 			var l storage.List
+			fmt.Printf("Updating: Current counter %d sale %d\n", t,c)
 			if t < c {
-				e := bin.AccessPool(&storage.KeyValue{Key: "GET", Value: strconv.Itoa(c/2)}, &l) 
+
+				e := bin.AccessPool(&storage.KeyValue{Key: "TICKETPOOL", Value: "GET,"+strconv.Itoa(c/2)}, &l) 
 				if e!=nil {
 					continue
 				}
@@ -136,12 +250,17 @@ func (self *TicketServer) UpdateTicketCounter() {
 				// update ticket counter
 				ret := strings.Split(l.L[0], ",")
 				n,_ := strconv.Atoi(ret[2])
+				fmt.Printf("GET %d\n", n)
 				self.tlock.Lock()
 				self.ticket_counter += n
+				t = self.ticket_counter
 				self.tlock.Unlock()
+				p(time.Now())
+				fmt.Printf("New %d\n", t)
+
 			
 			} else if t > c {
-				e := bin.AccessPool(&storage.KeyValue{Key: "PUT", Value: strconv.Itoa(t/2)}, &l)
+				e := bin.AccessPool(&storage.KeyValue{Key: "TICKETPOOL", Value: "PUT,"+strconv.Itoa(t/2)}, &l)
 				if e!=nil {
 					continue
 				}
@@ -149,9 +268,13 @@ func (self *TicketServer) UpdateTicketCounter() {
 				// update ticket counter
 				ret := strings.Split(l.L[0], ",")
 				n,_ := strconv.Atoi(ret[2])
+				fmt.Printf("PUT %d\n", n)
 				self.tlock.Lock()
 				self.ticket_counter -= n
+				t = self.ticket_counter
 				self.tlock.Unlock()
+				p(time.Now())
+				fmt.Printf("New %d\n", t)
 
 			}
 		}
