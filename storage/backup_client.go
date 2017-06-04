@@ -1,89 +1,83 @@
 package storage
 
 import (
-	"net/rpc"
+    "net"
+    "fmt"
 )
 
 type backup_client struct {
-	addr string
+    addr string
+    conn net.Conn
+    mux ConnMux
+    connected bool
 }
 
 func NewBackupClient(addr string) CommandStorage {
-	return &backup_client{addr: addr}
+    cli := backup_client{addr: addr}
+    e :=cli.init()
+    if e != nil {
+        fmt.Println(e)
+    }
+    return &cli
+}
+
+func (self *backup_client) init() error {
+    conn, e := net.Dial("tcp", self.addr)
+    if e != nil {
+        return e
+    }
+    self.conn = conn
+    self.mux = ConnMux{Conn: self.conn}
+    self.mux.Init()
+    self.connected = true
+    return nil
 }
 
 // KeyList interface
 func (self *backup_client) ListGet(key string, list *List) error {
-	// connect to the server
-	conn, e := rpc.DialHTTP("tcp", self.addr)
-	if e != nil {
-		return e
-	}
-
-	list.L = nil
-	// perform the call
-	e = conn.Call("CommandStorage.ListGet", key, list)
-	if e != nil {
-		conn.Close()
-		return e
-	}
-	if list.L == nil {
-		list.L = []string{}
-	}
-	// close the connection
-	return conn.Close()
+    if !self.connected {
+        e := self.init()
+        if e != nil {
+            return e
+        }
+    }
+    req := Request{OP: "ListGet", KV: &KeyValue{Key: key, Value: ""}}
+    res := self.mux.Handle(&req)
+    if res.Err != "" {
+        return fmt.Errorf(res.Err)
+    }
+    list.L = res.L.L
+	return nil
 }
 
 func (self *backup_client) ListAppend(kv *KeyValue, succ *bool) error {
-	// connect to the server
-	conn, e := rpc.DialHTTP("tcp", self.addr)
-	if e != nil {
-		return e
-	}
-
-	// perform the call
-	e = conn.Call("CommandStorage.ListAppend", kv, succ)
-	if e != nil {
-		conn.Close()
-		return e
-	}
-
-	// close the connection
-	return conn.Close()
-}
-
-func (self *backup_client) Clock(atLeast uint64, ret *uint64) error {
-	// connect to the server
-	conn, e := rpc.DialHTTP("tcp", self.addr)
-	if e != nil {
-		return e
-	}
-
-	// perform the call
-	e = conn.Call("CommandStorage.Clock", atLeast, ret)
-	if e != nil {
-		conn.Close()
-		return e
-	}
-
-	// close the connection
-	return conn.Close()
+    if !self.connected {
+        e := self.init()
+        if e != nil {
+            return e
+        }
+    }
+    req := Request{OP: "ListAppend", KV: kv}
+    res := self.mux.Handle(&req)
+    if res.Err != "" {
+        return fmt.Errorf(res.Err)
+    }
+    *succ = res.Succ
+	return nil
 }
 
 func (self *backup_client) StartServing(id int, clock *uint64) error {
-	// connect to the server
-	conn, e := rpc.DialHTTP("tcp", self.addr)
-	if e != nil {
-		return e
-	}
-
-	// perform the call
-	e = conn.Call("CommandStorage.StartServing", id, clock)
-	if e != nil {
-		conn.Close()
-		return e
-	}
-
-	// close the connection
-	return conn.Close()
+    if !self.connected {
+        e := self.init()
+        if e != nil {
+            return e
+        }
+    }
+    req := Request{OP: "StartServing", KV: &KeyValue{Key: fmt.Sprintf("%v", id), Value: ""}}
+    res := self.mux.Handle(&req)
+    if res.Err != "" {
+        return fmt.Errorf(res.Err)
+    }
+    fmt.Sscanf(res.L.L[0], "%v", clock)
+	return nil
 }

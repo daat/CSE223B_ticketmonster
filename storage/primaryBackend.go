@@ -19,6 +19,7 @@ type PrimaryBackend struct {
     backup *BackupBackend
     this int
     statusLock sync.Mutex
+    poolLock sync.Mutex
 }
 
 func (self *PrimaryBackend) getID(key string) int {
@@ -54,10 +55,8 @@ func (self *PrimaryBackend) Serve(b *BackConfig) error {
     self.backup = &BackupBackend{store: self.store, primary: self, this: self.this}
 
 	go self.export(b.PrimaryAddrs[b.This])
-    e := self.backup.export(b.BackupAddrs[b.This])
-    if e != nil {
-        return e
-    }
+    go self.backup.export(b.BackupAddrs[b.This])
+
     self.alive = make([]bool, len(b.BackupAddrs))
     self.moveToPrimary = make([]bool, len(b.BackupAddrs))
     self.moveToBackup = make([]bool, len(b.BackupAddrs))
@@ -125,9 +124,7 @@ func (self *PrimaryBackend) updatePreServerStatus(key string) error {
                 // fmt.Printf("%d: %d primary not alive\n", self.this, id)
                 self.alive[id] = false
 
-                go func() {
-                    /*migration*/
-                }()
+                go self.replicate((self.this+1) % len(self.alive), false)
             }
         }
         self.statusLock.Unlock()
@@ -151,9 +148,7 @@ func (self *PrimaryBackend) sendBackup(kv *KeyValue, succ *bool) error {
             self.alive[now] = false
             self.statusLock.Unlock()
             now = (now + 1) % len(self.clients)
-            go func() {
-                /*migration*/
-            }()
+            go self.replicate(now, true)
         } else {
             break
         }
@@ -192,9 +187,7 @@ func (self *PrimaryBackend) ListGet(key string, list *List) error {
             self.alive[now] = false
             self.statusLock.Unlock()
             now = (now + 1) % len(self.clients)
-            go func() {
-                /*migration*/
-            }()
+            go self.replicate(now, true)
         } else {
             break
         }
@@ -268,6 +261,9 @@ func (self *PrimaryBackend) AccessPool(kv *KeyValue, list *List) error {
         return e
     }
 
+    self.poolLock.Lock()
+    defer self.poolLock.Unlock()
+
     var clock uint64
     self.store.Clock(clock, &clock)
     kv.Value = fmt.Sprintf("%25d,%s", clock, kv.Value)
@@ -286,4 +282,19 @@ func (self *PrimaryBackend) AccessPool(kv *KeyValue, list *List) error {
     }
 
     return nil
+}
+
+func (self *PrimaryBackend) replicate(dest int, isThis bool) {
+    var list, logs List
+    var succ bool
+    self.store.ListKeys(&Pattern{}, &list)
+    keys := list.L
+    for _, key := range keys {
+        if isThis == (self.getID(key) == self.this) {
+            self.store.ListGet(key, &logs)
+            for _, log := range logs.L {
+    			self.clients[dest].ListAppend(&KeyValue{Key: key, Value: log}, &succ)
+    		}
+        }
+    }
 }
