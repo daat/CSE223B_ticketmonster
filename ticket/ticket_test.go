@@ -40,5 +40,5 @@ func TestTicket(t *testing.T) {
     tserver.InitPool()
     fmt.Printf("Init\n")
 
-	CheckServerConcur(t, tserver)
+	CheckServerConcur(t, &tserver)
 }
