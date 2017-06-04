@@ -83,7 +83,7 @@ func (self *TicketServer) Init(n int) error {
 	if e != nil {
 		return e
 	}
-	
+
 	server := rpc.NewServer()
 	e = server.RegisterName("Window", self)
 	if e != nil {
@@ -117,7 +117,7 @@ func (self *TicketServer) BuyTicket(in *BuyInfo, succ *bool) error {
 	self.ticket_counter -= in.N
 	self.current_sale += in.N
 
-	fmt.Printf("Buy %v\n", in.N)
+    fmt.Printf("%v, Buy %v, %v left\n", time.Now(), in.N, self.ticket_counter)
 
 	e := self.WriteToLog(in.Uid, strconv.Itoa(in.N))
 	if e != nil {
@@ -205,7 +205,7 @@ func (self *TicketServer) listen_func(exit chan bool) {
 
     	if string(buffer[:n]) == "beep" {
     		words := fmt.Sprintf("%s,%d", self.tc.Id, self.ticket_counter)
-    		conn.Write([]byte(words))  
+    		conn.Write([]byte(words))
     	} else {
     		info := strings.Split(string(buffer[:n]), ",")
     		if len(info)!=2 {
@@ -232,21 +232,21 @@ func (self *TicketServer) UpdateTicketCounter() {
 		select {
 		case <- tick_chan:
 			self.tlock.Lock()
-			c := self.current_sale 
+			c := self.current_sale
 			t := self.ticket_counter
 			self.current_sale = 0
 			self.tlock.Unlock()
 
 			bin := self.Bc.Bin(self.tc.Id)
 			var l storage.List
-			fmt.Printf("Updating: Current counter %d sale %d\n", t,c)
+			fmt.Printf("%v, Updating: Current counter %d sale %d\n", time.Now(), t, c)
 			if t < c {
 
-				e := bin.AccessPool(&storage.KeyValue{Key: "TICKETPOOL", Value: "GET,"+strconv.Itoa(c/2)}, &l) 
+				e := bin.AccessPool(&storage.KeyValue{Key: "TICKETPOOL", Value: "GET,"+strconv.Itoa(c/2)}, &l)
 				if e!=nil {
 					continue
 				}
-				
+
 				// update ticket counter
 				ret := strings.Split(l.L[0], ",")
 				n,_ := strconv.Atoi(ret[2])
@@ -258,7 +258,7 @@ func (self *TicketServer) UpdateTicketCounter() {
 				p(time.Now())
 				fmt.Printf("New %d\n", t)
 
-			
+
 			} else if t > c {
 				e := bin.AccessPool(&storage.KeyValue{Key: "TICKETPOOL", Value: "PUT,"+strconv.Itoa(t/2)}, &l)
 				if e!=nil {

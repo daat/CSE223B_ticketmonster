@@ -13,7 +13,7 @@ import (
 
 
 
-func CheckServerConcur(t *testing.T, ts ticket.TicketServer) {
+func CheckServerConcur(t *testing.T, ts *ticket.TicketServer) {
 	runtime.GOMAXPROCS(2)
 
 	ne := func(e error) {
@@ -29,8 +29,8 @@ func CheckServerConcur(t *testing.T, ts ticket.TicketServer) {
 			t.Fatal()
 		}
 	}
-	
-	
+
+
 	as := func(cond bool) {
 		if !cond {
 			debug.PrintStack()
@@ -63,8 +63,8 @@ func CheckServerConcur(t *testing.T, ts ticket.TicketServer) {
 	v := 0
 	ne(ts.GetLeftTickets(true, &v))
 	//as(v == 500)
-	
-	//as(ts.GetLeftTickets() == 500) 
+
+	//as(ts.GetLeftTickets() == 500)
 	//v := ts.GetLeftTickets()
 	fmt.Printf("Ticket left %v\n", v)
 
