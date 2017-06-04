@@ -28,7 +28,17 @@ func TestTicket(t *testing.T) {
         }
     }
 
-	tserver := ticket.NewTicketServer(primaryAddrs, "0", "localhost:17000")
+    ret := new(ticket.TicketServerConfig)
+    ret.Backs = primaryAddrs
+    ret.OutAddr = "localhost:17000"
+    ret.InAddrs = []string{"localhost:17001"}
+    ret.This = 0
+    ret.Id = "0"
+    fmt.Printf("New TicketServer\n")
+	tserver := ticket.NewTicketServer(ret)
+    tserver.Init(10000)
+    tserver.InitPool()
+    fmt.Printf("Init\n")
 
 	CheckServerConcur(t, tserver)
 }
