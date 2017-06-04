@@ -65,9 +65,13 @@ func TestBackend(t *testing.T) {
     kv = storage.KeyValue{Key: "TICKETPOOL", Value: "PUT,1000,1000"}
     ne(bin.ListAppend(&kv, &succ))
 
-    // get pool
+    // access pool
     kv = storage.KeyValue{Key: "TICKETPOOL", Value: "GET,100"}
     ne(bin.AccessPool(&kv, &list))
     as(strings.Split(list.L[0], ",")[3] == "900")
+
+    kv = storage.KeyValue{Key: "TICKETPOOL", Value: "PUT,50"}
+    ne(bin.AccessPool(&kv, &list))
+    as(strings.Split(list.L[0], ",")[3] == "950")
 
 }

@@ -2,8 +2,6 @@ package storage
 
 import (
 	"net"
-	"net/http"
-	"net/rpc"
     "fmt"
     "strings"
 )
@@ -14,19 +12,43 @@ type BackupBackend struct {
     this int
 }
 
-func (self *BackupBackend) export(addr string) error {
-    l, e := net.Listen("tcp", addr)
-	if e != nil {
-		return e
-	}
-	server := rpc.NewServer()
-	e = server.RegisterName("CommandStorage", self)
-	if e != nil {
-		return e
-	}
+func (self *BackupBackend) Handle(req *Request) *Response {
+    res := Response{}
+    var e error
+    if req.OP == "ListAppend" {
+        e = self.ListAppend(req.KV, &res.Succ)
+    } else if req.OP == "ListGet" {
+        e = self.ListGet(req.KV.Key, &res.L)
+    } else if req.OP == "StartServing" {
+        var id int
+        var clock uint64
+        fmt.Sscanf(req.KV.Key, "%d", &id)
+        e = self.StartServing(id, &clock)
+        res.L.L = []string{fmt.Sprintf("%v", clock)}
+    } else {
+        e = fmt.Errorf("no this operation")
+    }
+    if e != nil {
+        res.Err = e.Error()
+    }
+    return &res
+}
 
-	go http.Serve(l, server)
-    return nil
+func (self *BackupBackend) export(addr string) {
+    l, ee := net.Listen("tcp", addr)
+	if ee != nil {
+        fmt.Println(ee)
+        return
+	}
+	for {
+        conn, e := l.Accept()
+        if e != nil {
+            fmt.Println(e)
+            return
+        }
+        demux := ConnDemux{Conn: conn, Server: self}
+        go demux.Serve()
+    }
 }
 
 func (self *BackupBackend) Clock(atLeast uint64, ret *uint64) error {
