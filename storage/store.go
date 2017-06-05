@@ -38,7 +38,8 @@ func NewStore() *Store {
 	//return NewStorageId(0)
 
 	store := NewStoreId(0)
-
+    var clock uint64 = 1
+    store.Clock(clock, &clock) //start from 1
 	return store
 
 }

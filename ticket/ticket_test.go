@@ -38,7 +38,7 @@ func TestTicket(t *testing.T) {
 	tserver := ticket.NewTicketServer(ret)
     tserver.InitPool()
     tserver.Init(10000)
-    
+
 
 	CheckServerConcur(t, &tserver)
 }
