@@ -39,8 +39,8 @@ type TicketServer struct{
 	my_iaddr string
 
 	// record other ticektserver state
-	ts_counts_map map[string]int
-	ts_states_map map[string]bool
+	ts_counts []int
+	ts_states []bool
 
 	// related variables
 	tlock sync.Mutex
@@ -59,20 +59,20 @@ func NewTicketServer(config *TicketServerConfig) TicketServer {
 }
 
 
-func (self *TicketServer) Init(n int) error {
+func (self *TicketServer) Init() error {
 	self.tlock.Lock()
-	self.ticket_counter = n
+	self.ticket_counter = 0
 	self.current_sale = 0
 	self.tlock.Unlock()
 
 	self.GetFromPool(init_tickets)
-	//fmt.Printf("Init: %v\n", self.ticket_counter)
+	fmt.Printf("Init: %v\n", self.ticket_counter)
 
-	self.ts_counts_map = make(map[string]int)
-	self.ts_states_map = make(map[string]bool)
-	for _, v := range self.tc.Backs {
-		self.ts_counts_map[v] = 0
-		self.ts_states_map[v] = true
+	self.ts_counts = make([]int, len(self.tc.InAddrs))
+	self.ts_states = make([]bool, len(self.tc.InAddrs))
+	for i,_ := range self.tc.InAddrs {
+		self.ts_counts[i] = 0
+		self.ts_states[i] = true
 	}
 
 	// start listening for inside connection
@@ -98,18 +98,21 @@ func (self *TicketServer) Init(n int) error {
 
 	go http.Serve(l, server)
 	go self.UpdateTicketCounter()
+	go self.HeartBeat(nil)
 	return nil
 }
 
-func (self *TicketServer) InitPool() {
+func (self *TicketServer) InitPool() error{
 	bin := self.Bc.Bin(self.tc.Id)
 	var succ bool
 	succ = false
 	bin.ListAppend(&storage.KeyValue{Key: "TICKETPOOL", Value: "PUT,20000,20000"}, &succ)
 	if succ == false{
-		fmt.Printf("InitPool fail\n")
+		return fmt.Errorf("InitPool fail\n")
 	}
-
+	return nil
+	/*
+	// check pool init
 	var l storage.List
 	e := bin.AccessPool(&storage.KeyValue{Key: "TICKETPOOL", Value: "GET,0"}, &l)
 	if e!=nil {
@@ -121,6 +124,7 @@ func (self *TicketServer) InitPool() {
 	ret := strings.Split(l.L[0], ",")
 	total,_ := strconv.Atoi(ret[3])
 	fmt.Printf("Pool: %d\n", total)
+	*/
 }
 
 
@@ -164,12 +168,12 @@ func (self *TicketServer) GetLeftTickets(useless bool, n *int) error {
 	return nil
 }
 
-/*
+
 func (self *TicketServer) HeartBeat(exit chan bool){
 	listen_exit := make(chan bool)
 	go self.listen_func(listen_exit)
 
-	t := time.NewTicker(time.Second) // freq to be adjust
+	t := time.NewTicker(time.Second*10) // freq to be adjust
 
 	for {
 		select {
@@ -177,30 +181,26 @@ func (self *TicketServer) HeartBeat(exit chan bool){
 			exit <- true
 			return
 		default:
-			for _, v := range self.tc.InAddrs {
-				conn, e := net.Dial("tcp", v)
+			for i, v := range self.tc.InAddrs {
+				if i == self.tc.This{
+					continue
+				}
+				fmt.Printf("%s dialing %d\n", self.tc.Id, i)
+				conn, e := net.DialTimeout("tcp", v, time.Second)
 				if e != nil {
+					self.ts_states[i] = false
 					// ticket server v fail, do recovery
 					// ...
 					continue
 				}
-				self.ts_states_map[v] = false
-				conn.Write([]byte("beep"))
-				// wait for 0.5 second
-				time.Sleep(250 * time.Millisecond)
-				if self.ts_states_map[v] == false {
-					// ticket server v fail, do recovery
-					// ...
-				}
-
-				conn.Close()
+				go self.handle(conn, i)
 			}
 			<-t.C
 		}
 
 	}
 }
-*/
+
 
 func (self *TicketServer) listen_func(exit chan bool) {
 	for {
@@ -211,31 +211,39 @@ func (self *TicketServer) listen_func(exit chan bool) {
 			break
 		}
 
-    	buffer := make([]byte, 256)
-    	n, err := conn.Read(buffer)
-    	if err!=nil{
-    		conn.Close()
-    		continue
-    	}
-
-    	if string(buffer[:n]) == "beep" {
-    		words := fmt.Sprintf("%s,%d", self.tc.Id, self.ticket_counter)
-    		conn.Write([]byte(words))
-    	} else {
-    		info := strings.Split(string(buffer[:n]), ",")
-    		if len(info)!=2 {
-    			conn.Close()
-    			continue
-    		}
-
-    		num,_ := strconv.Atoi(info[1])
-    		self.ts_counts_map[info[0]] = num
-    		self.ts_states_map[info[0]] = true
-
-    	}
-
+    	words := fmt.Sprintf("%s,%d", self.tc.Id, self.ticket_counter)
+    	conn.Write([]byte(words))
+    	
 		conn.Close()
 	}
+}
+
+func (self *TicketServer) handle(conn net.Conn, i int){
+	buffer := make([]byte, 256)
+	conn.SetReadDeadline(time.Now().Add(time.Microsecond * 10))
+	n, err := conn.Read(buffer)
+	if err!=nil{
+		self.ts_states[i] = false
+		// ticket server v fail, do recovery
+		// ...
+		conn.Close()
+		return
+	}
+
+	info := strings.Split(string(buffer[:n]), ",")
+	if len(info)!=2 {
+		conn.Close()
+		return
+	}
+	id, _ := strconv.Atoi(info[0])
+	if id != i {
+		return
+	}
+	num,_ := strconv.Atoi(info[1])
+	self.ts_counts[i] = num
+	self.ts_states[i] = true
+
+	fmt.Printf("%v, server %d count: %d\n",time.Now(), i, num)
 }
 
 

@@ -34,7 +34,8 @@ func main() {
 		}
 		tsConfig := rc.TSConfig(i)
 		ts := ticket.NewTicketServer(tsConfig)
-		noError(ts.Init(100000))
+		noError(ts.InitPool())
+		noError(ts.Init())
 		log.Printf("ticket server serving on %s", rc.TicketServers_out[i])
 	}
 
