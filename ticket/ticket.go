@@ -13,6 +13,8 @@ import (
 	"ticketmonster/storage"
 )
 
+const init_tickets = 10000
+
 type TicketServerConfig struct {
 	// The addresses of back-ends
 	Backs []string
@@ -63,6 +65,9 @@ func (self *TicketServer) Init(n int) error {
 	self.current_sale = 0
 	self.tlock.Unlock()
 
+	//self.GetFromPool(init_tickets)
+	//fmt.Printf("Init: %v\n", self.ticket_counter)
+
 	self.ts_counts_map = make(map[string]int)
 	self.ts_states_map = make(map[string]bool)
 	for _, v := range self.tc.Backs {
@@ -89,6 +94,8 @@ func (self *TicketServer) Init(n int) error {
 	if e != nil {
 		return e
 	}
+
+
 	go http.Serve(l, server)
 	go self.UpdateTicketCounter()
 	return nil
@@ -98,7 +105,7 @@ func (self *TicketServer) InitPool() {
 	bin := self.Bc.Bin(self.tc.Id)
 	var succ bool
 	succ = false
-	bin.ListAppend(&storage.KeyValue{Key: "TICKETPOOL", Value: "PUT,1000,1000"}, &succ)
+	bin.ListAppend(&storage.KeyValue{Key: "TICKETPOOL", Value: "PUT,20000,20000"}, &succ)
 	if succ == false{
 		fmt.Printf("InitPool fail\n")
 	}
@@ -117,7 +124,7 @@ func (self *TicketServer) BuyTicket(in *BuyInfo, succ *bool) error {
 	self.ticket_counter -= in.N
 	self.current_sale += in.N
 
-    fmt.Printf("%v, Buy %v, %v left\n", time.Now(), in.N, self.ticket_counter)
+    //fmt.Printf("%v, Buy %v, %v left\n", time.Now(), in.N, self.ticket_counter)
 
 	e := self.WriteToLog(in.Uid, strconv.Itoa(in.N))
 	if e != nil {
@@ -139,13 +146,9 @@ func (self *TicketServer) WriteToLog(uid string, n string) error {
 }
 
 func (self *TicketServer) GetLeftTickets(useless bool, n *int) error {
-	p := fmt.Println
 	self.tlock.Lock()
-	t := self.ticket_counter
 	*n = self.ticket_counter
 	self.tlock.Unlock()
-	p(time.Now())
-	fmt.Printf("GetTickets %d\n", t)
 	return nil
 }
 
@@ -226,7 +229,6 @@ func (self *TicketServer) listen_func(exit chan bool) {
 
 func (self *TicketServer) UpdateTicketCounter() {
 	tick_chan := time.NewTicker(time.Second * 30).C // freq to be adjust
-	p := fmt.Println
 
 	for {
 		select {
@@ -237,46 +239,66 @@ func (self *TicketServer) UpdateTicketCounter() {
 			self.current_sale = 0
 			self.tlock.Unlock()
 
-			bin := self.Bc.Bin(self.tc.Id)
-			var l storage.List
-			fmt.Printf("%v, Updating: Current counter %d sale %d\n", time.Now(), t, c)
-			if t < c {
-
-				e := bin.AccessPool(&storage.KeyValue{Key: "TICKETPOOL", Value: "GET,"+strconv.Itoa(c/2)}, &l)
+			//fmt.Printf("%v, Updating: Current counter %d sale %d\n", time.Now(), t, c)
+			if t==0 && c==0 {
+				e := self.GetFromPool(init_tickets)
 				if e!=nil {
 					continue
 				}
 
-				// update ticket counter
-				ret := strings.Split(l.L[0], ",")
-				n,_ := strconv.Atoi(ret[2])
-				fmt.Printf("GET %d\n", n)
-				self.tlock.Lock()
-				self.ticket_counter += n
-				t = self.ticket_counter
-				self.tlock.Unlock()
-				p(time.Now())
-				fmt.Printf("New %d\n", t)
-
-
+			} else if t < c {
+				e := self.GetFromPool(c/2)
+				if e!=nil {
+					continue
+				}
+				
 			} else if t > c {
-				e := bin.AccessPool(&storage.KeyValue{Key: "TICKETPOOL", Value: "PUT,"+strconv.Itoa(t/2)}, &l)
+				e := self.PutToPool(t/2)
 				if e!=nil {
 					continue
 				}
-
-				// update ticket counter
-				ret := strings.Split(l.L[0], ",")
-				n,_ := strconv.Atoi(ret[2])
-				fmt.Printf("PUT %d\n", n)
-				self.tlock.Lock()
-				self.ticket_counter -= n
-				t = self.ticket_counter
-				self.tlock.Unlock()
-				p(time.Now())
-				fmt.Printf("New %d\n", t)
 
 			}
 		}
 	}
+}
+
+func (self *TicketServer) GetFromPool(n int) error {
+	bin := self.Bc.Bin(self.tc.Id)
+	var l storage.List
+
+	e := bin.AccessPool(&storage.KeyValue{Key: "TICKETPOOL", Value: "GET,"+strconv.Itoa(n)}, &l)
+	if e!=nil {
+		return e
+	}
+
+	// update ticket counter
+	ret := strings.Split(l.L[0], ",")
+	num,_ := strconv.Atoi(ret[2])
+
+	self.tlock.Lock()
+	self.ticket_counter += num
+	//fmt.Printf("%v, %d, %d\n", time.Now(), num, self.ticket_counter)
+	self.tlock.Unlock()
+
+	return nil
+}
+
+func (self *TicketServer) PutToPool(n int) error {
+	bin := self.Bc.Bin(self.tc.Id)
+	var l storage.List
+
+	e := bin.AccessPool(&storage.KeyValue{Key: "TICKETPOOL", Value: "PUT,"+strconv.Itoa(n)}, &l)
+	if e!=nil {
+		return e
+	}
+
+	// update ticket counter
+	ret := strings.Split(l.L[0], ",")
+	num,_ := strconv.Atoi(ret[2])
+	self.tlock.Lock()
+	self.ticket_counter -= num
+	self.tlock.Unlock()
+
+	return nil
 }

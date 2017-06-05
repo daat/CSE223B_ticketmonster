@@ -34,11 +34,11 @@ func TestTicket(t *testing.T) {
     ret.InAddrs = []string{"localhost:17001"}
     ret.This = 0
     ret.Id = "0"
-    fmt.Printf("New TicketServer\n")
+
 	tserver := ticket.NewTicketServer(ret)
-    tserver.Init(10000)
     tserver.InitPool()
-    fmt.Printf("Init\n")
+    tserver.Init(10000)
+    
 
 	CheckServerConcur(t, &tserver)
 }
