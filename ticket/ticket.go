@@ -65,7 +65,7 @@ func (self *TicketServer) Init(n int) error {
 	self.current_sale = 0
 	self.tlock.Unlock()
 
-	//self.GetFromPool(init_tickets)
+	self.GetFromPool(init_tickets)
 	//fmt.Printf("Init: %v\n", self.ticket_counter)
 
 	self.ts_counts_map = make(map[string]int)
@@ -263,7 +263,7 @@ func (self *TicketServer) UpdateTicketCounter() {
 				if e!=nil {
 					continue
 				}
-				
+
 			} else if t > c {
 				e := self.PutToPool(t/2)
 				if e!=nil {
@@ -290,7 +290,7 @@ func (self *TicketServer) GetFromPool(n int) error {
 
 	self.tlock.Lock()
 	self.ticket_counter += num
-	//fmt.Printf("%v, %d, %d\n", time.Now(), num, self.ticket_counter)
+	// fmt.Printf("%v, %d, %d\n", time.Now(), num, self.ticket_counter)
 	self.tlock.Unlock()
 
 	return nil
