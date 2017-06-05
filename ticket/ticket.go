@@ -109,6 +109,18 @@ func (self *TicketServer) InitPool() {
 	if succ == false{
 		fmt.Printf("InitPool fail\n")
 	}
+
+	var l storage.List
+	e := bin.AccessPool(&storage.KeyValue{Key: "TICKETPOOL", Value: "GET,0"}, &l)
+	if e!=nil {
+		// 
+	}
+
+	// update ticket counter
+	fmt.Printf("%s\n", l.L[0])
+	ret := strings.Split(l.L[0], ",")
+	total,_ := strconv.Atoi(ret[3])
+	fmt.Printf("Pool: %d\n", total)
 }
 
 
