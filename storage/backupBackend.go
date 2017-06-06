@@ -81,6 +81,9 @@ func (self *BackupBackend) StartServing(id int, clock *uint64) error {
     self.primary.statusLock.Lock()
     self.primary.alive[id] = true
     fmt.Printf("%d: %d alive\n", self.this, id)
+
+    self.primary.clients[id] = NewBackupClient(self.primary.bc.BackupAddrs[id])
+
     if id == (self.this - 1) % len(self.primary.alive) {
         self.primary.moveToPrimary[id] = true
     } else if id == (self.this + 1) % len(self.primary.alive) {
@@ -92,6 +95,7 @@ func (self *BackupBackend) StartServing(id int, clock *uint64) error {
     go func() {
         /*migration*/
         if id == (self.this - 1) % len(self.primary.alive) {
+            self.primary.replicate(id, false)
             self.primary.moveToPrimary[id] = false
         } else if id == (self.this + 1) % len(self.primary.alive) {
             self.primary.moveToBackup[id] = false

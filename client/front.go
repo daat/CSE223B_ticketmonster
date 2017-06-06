@@ -3,6 +3,7 @@ package client
 import (
     "ticketmonster/ticket"
     "fmt"
+    "math/rand"
 )
 
 type Front struct {
@@ -22,5 +23,6 @@ func (self *Front) BuyTicket(in *ticket.BuyInfo, succ *bool) error {
     if len(self.clients) == 0 {
         return fmt.Errorf("no ticket servers")
     }
+    _ = rand.Int()%len(self.clients)
     return self.clients[0].BuyTicket(in, succ)
 }

@@ -32,6 +32,7 @@ type Handler interface {
 type ConnDemux struct {
     Conn net.Conn
     Server Handler
+    lock sync.Mutex
 }
 
 func (self *ConnDemux) Serve() {
@@ -49,17 +50,19 @@ func (self *ConnDemux) Serve() {
             //         fmt.Printf("deencode:: %v\n", e)
             //     }
             // }(e, req.Seq)
-            fmt.Println("connection close")
+            fmt.Printf("%v, connection close\n", e)
             self.Conn.Close()
             return
         } else {
             go func(r *Request) {
                 res := self.Server.Handle(r)
                 res.Seq = r.Seq
+                self.lock.Lock()
                 e = enc.Encode(res)
                 if e != nil {
                     fmt.Printf("encode:: %v\n", e)
                 }
+                self.lock.Unlock()
             }(&req)
         }
     }
@@ -90,14 +93,17 @@ func (self *ConnMux) sender() {
         self.chs[self.Seq] = req_res.Res
         self.lock.Unlock()
         go func(req *Request){
+            // self.lock.Lock()
             e := enc.Encode(req)
             // fmt.Printf("send: %v\n", req.Seq)
             if e != nil {
                 self.lock.Lock()
+                fmt.Printf("send: %v\n", e)
                 self.chs[req.Seq] <- Response{Err: e.Error()}
                 delete(self.chs, req.Seq)
                 self.lock.Unlock()
             }
+            // self.lock.Unlock()
         }(req_res.Req)
         self.Seq++
     }

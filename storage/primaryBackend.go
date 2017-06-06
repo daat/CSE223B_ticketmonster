@@ -52,6 +52,7 @@ func (self *PrimaryBackend) export(addr string) {
 func (self *PrimaryBackend) Serve(b *BackConfig) error {
     self.store = *NewStore()
     self.this = b.This
+    self.bc = b
     self.backup = &BackupBackend{store: self.store, primary: self, this: self.this}
 
 	go self.export(b.PrimaryAddrs[b.This])
