@@ -109,7 +109,7 @@ func (self *TicketServer) Init() error {
 
 
 	go http.Serve(l, server)
-	go self.UpdateTicketCounter()
+	// go self.UpdateTicketCounter()
 	go self.HeartBeat(nil)
 	return nil
 }
@@ -118,7 +118,7 @@ func (self *TicketServer) InitPool() error{
 	bin := self.Bc.Bin("0")
 	var succ bool
 	succ = false
-	bin.ListAppend(&storage.KeyValue{Key: "TICKETPOOL", Value: "PUT,50000,50000"}, &succ)
+	bin.ListAppend(&storage.KeyValue{Key: "TICKETPOOL", Value: "PUT,30000,30000"}, &succ)
 	if succ == false{
 		return fmt.Errorf("InitPool fail\n")
 	}

@@ -13,7 +13,7 @@ import (
 )
 
 func main() {
-    n := 1000
+    n := 15000
     wait := true
     rc, _ := ticketmonster.LoadRC("bins.rc")
     var front client.Front
@@ -39,12 +39,31 @@ func main() {
         id, _ = strconv.Atoi(string(buffer[:n]))
 
     }
-    f, _ := os.Create(fmt.Sprintf("output_%v.txt", id))
-    w := bufio.NewWriter(f)
 
-    ch := make(chan int64, n)
+    exit_ch := make(chan bool)
+    wait_ch := make(chan bool, 1000)
+    ch := make(chan int64, 1000)
+
+    go func() {
+        f, _ := os.Create(fmt.Sprintf("output_%v.txt", id))
+        w := bufio.NewWriter(f)
+        lines := make([]string, 0, n)
+        for i := 0; i < n; i++ {
+            t := fmt.Sprintf("%v\n",<-ch)
+            <-wait_ch
+            lines = append(lines, t)
+        }
+        for i := 0; i < n; i++ {
+            w.WriteString(lines[i])
+        }
+        w.Flush()
+        f.Close()
+        exit_ch <- true
+    }()
+
     for i := 0; i < n; i++ {
         go func(uid int) {
+            wait_ch <- true
             var succ bool
             info := &ticket.BuyInfo{Uid: fmt.Sprintf("uuu%d", uid), N: 1}
             now := time.Now().UnixNano()
@@ -55,12 +74,5 @@ func main() {
             ch <- (time.Now().UnixNano() - now)
         }(i)
     }
-    s := ""
-    for i := 0; i < n; i++ {
-        t := fmt.Sprintf("%v\n",<-ch)
-        s = s + t
-    }
-    w.WriteString(s)
-    w.Flush()
-    f.Close()
+    <- exit_ch
 }
