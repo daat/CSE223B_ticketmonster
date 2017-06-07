@@ -30,6 +30,11 @@ type TicketServerConfig struct {
 
 	// TicketServer Id ('0', '1', '2')
 	Id string
+
+	// Send a value when the ticketserver is ready
+	// The distributed service should be ready to serve
+	// when all of the ticketservers is ready.
+	Ready chan<- bool
 }
 
 type TicketServer struct{
@@ -40,7 +45,7 @@ type TicketServer struct{
 
 	// record other ticektserver state
 	ts_counts []int
-	ts_states []bool
+	ts_states []int
 
 	// related variables
 	tlock sync.Mutex
@@ -55,6 +60,13 @@ type TicketServer struct{
 func NewTicketServer(config *TicketServerConfig) TicketServer {
 	s := storage.NewBinClient(config.Backs)
 	ts := TicketServer{Bc: s, tc: config}
+	if config.Id == "0" {
+		ts.InitPool()
+	}
+	ts.Init()
+	if config.Ready != nil {
+		config.Ready <- true
+	}
 	return ts
 }
 
@@ -66,13 +78,13 @@ func (self *TicketServer) Init() error {
 	self.tlock.Unlock()
 
 	self.GetFromPool(init_tickets)
-	fmt.Printf("Init: %v\n", self.ticket_counter)
+	fmt.Printf("%s Init: %v\n", self.tc.Id, self.ticket_counter)
 
 	self.ts_counts = make([]int, len(self.tc.InAddrs))
-	self.ts_states = make([]bool, len(self.tc.InAddrs))
+	self.ts_states = make([]int, len(self.tc.InAddrs))
 	for i,_ := range self.tc.InAddrs {
 		self.ts_counts[i] = 0
-		self.ts_states[i] = true
+		self.ts_states[i] = -1
 	}
 
 	// start listening for inside connection
@@ -103,32 +115,19 @@ func (self *TicketServer) Init() error {
 }
 
 func (self *TicketServer) InitPool() error{
-	bin := self.Bc.Bin(self.tc.Id)
+	bin := self.Bc.Bin("0")
 	var succ bool
 	succ = false
-	bin.ListAppend(&storage.KeyValue{Key: "TICKETPOOL", Value: "PUT,30000,30000"}, &succ)
+	bin.ListAppend(&storage.KeyValue{Key: "TICKETPOOL", Value: "PUT,50000,50000"}, &succ)
 	if succ == false{
 		return fmt.Errorf("InitPool fail\n")
 	}
 	return nil
-	/*
-	// check pool init
-	var l storage.List
-	e := bin.AccessPool(&storage.KeyValue{Key: "TICKETPOOL", Value: "GET,0"}, &l)
-	if e!=nil {
-		//
-	}
-
-	// update ticket counter
-	fmt.Printf("%s\n", l.L[0])
-	ret := strings.Split(l.L[0], ",")
-	total,_ := strconv.Atoi(ret[3])
-	fmt.Printf("Pool: %d\n", total)
-	*/
 }
 
-
-
+// BuyTicket
+// server log - Key: "LOG", Value: n,new_total
+// user log - Key: uid, Value: n
 func (self *TicketServer) BuyTicket(in *BuyInfo, succ *bool) error {
 	self.tlock.Lock()
 	defer self.tlock.Unlock()
@@ -141,8 +140,11 @@ func (self *TicketServer) BuyTicket(in *BuyInfo, succ *bool) error {
 	self.current_sale += in.N
 
     //fmt.Printf("%v, Buy %v, %v left\n", time.Now(), in.N, self.ticket_counter)
-
-	e := self.WriteToLog(in.Uid, strconv.Itoa(in.N))
+	e := self.WriteToLog(self.tc.Id, strconv.Itoa(self.ticket_counter))
+	if e != nil {
+		return e
+	}
+	e = self.WriteToLog(in.Uid, strconv.Itoa(in.N))
 	if e != nil {
 		return e
 	}
@@ -150,13 +152,13 @@ func (self *TicketServer) BuyTicket(in *BuyInfo, succ *bool) error {
 	return nil
 }
 
-func (self *TicketServer) WriteToLog(uid string, n string) error {
-	bin := self.Bc.Bin(self.tc.Id)
+func (self *TicketServer) WriteToLog(key string, n string) error {
+	bin := self.Bc.Bin(key)
 	var succ bool
 	succ = false
-	bin.ListAppend(&storage.KeyValue{Key: uid, Value: n}, &succ)
+	bin.ListAppend(&storage.KeyValue{Key: "LOG", Value: n}, &succ)
 	if succ == false{
-		return fmt.Errorf("WriteToLog failed %q", uid)
+		return fmt.Errorf("%q WriteToLog failed ", key)
 	}
 	return nil
 }
@@ -168,6 +170,26 @@ func (self *TicketServer) GetLeftTickets(useless bool, n *int) error {
 	return nil
 }
 
+func (self *TicketServer) GetAllTickets(useloss bool, ret *storage.List) error {
+	l := make([]string, 0, len(self.tc.InAddrs))
+	for i, n := range self.ts_counts {
+		if i == self.tc.This {
+			l = append(l, "-")
+		} else if self.ts_states[i] == 1 {
+			l = append(l, strconv.Itoa(n))
+		} else {
+			l = append(l, "0")
+		}
+	}
+	ret.L = l
+	return nil
+}
+
+
+// server states
+// 1 - live
+// 0 - to be recovered
+// -1 - server dead
 
 func (self *TicketServer) HeartBeat(exit chan bool){
 	listen_exit := make(chan bool)
@@ -181,19 +203,31 @@ func (self *TicketServer) HeartBeat(exit chan bool){
 			exit <- true
 			return
 		default:
+			higher_reply := false
 			for i, v := range self.tc.InAddrs {
 				if i == self.tc.This{
 					continue
 				}
-				fmt.Printf("%s dialing %d\n", self.tc.Id, i)
+				//fmt.Printf("%s dialing %d\n", self.tc.Id, i)
 				conn, e := net.DialTimeout("tcp", v, time.Second)
 				if e != nil {
-					self.ts_states[i] = false
-					// ticket server v fail, do recovery
-					// ...
+					if self.ts_states[i] == 1{
+						self.ts_states[i] = 0
+					}
 					continue
 				}
+				if i > self.tc.This {
+					higher_reply = true
+				}
 				go self.handle(conn, i)
+			}
+			if higher_reply == false {
+				for i:=self.tc.This+1; i<len(self.tc.InAddrs); i++{
+					if self.ts_states[i] == 0{
+						fmt.Printf("%s DoRecovery %d", self.tc.Id, i)
+						go self.DoRecovery(i)
+					}
+				}
 			}
 			<-t.C
 		}
@@ -201,6 +235,43 @@ func (self *TicketServer) HeartBeat(exit chan bool){
 	}
 }
 
+// server log - Key: "LOG", Value: n,new_total
+func (self *TicketServer) DoRecovery(i int) {
+	bin := self.Bc.Bin(strconv.Itoa(i))
+	//ListGet(key string, ret *List)
+	var l storage.List
+	e := bin.ListGet("LOG", &l)
+	if e!=nil{
+		return
+	}
+
+	// get last log total
+	if len(l.L)==0 {
+		return
+	}
+	last_log := l.L[len(l.L)-1]
+	total,_ := strconv.Atoi(last_log)
+
+	// put the failed server tickets to pool
+	e = self.PutToPool(total)
+	if e!= nil{
+		// recovery not succeed
+		// wait till next heartbeat to redo
+		return
+	}
+
+	// write to failed server log
+	succ := false
+	bin.ListAppend(&storage.KeyValue{Key: "LOG", Value: "0,0"}, &succ)
+	if succ!= true {
+		return
+	}
+
+	// change server i state to dead
+	self.ts_states[i] = -1
+
+	return
+}
 
 func (self *TicketServer) listen_func(exit chan bool) {
 	for {
@@ -223,9 +294,8 @@ func (self *TicketServer) handle(conn net.Conn, i int){
 	conn.SetReadDeadline(time.Now().Add(time.Microsecond * 10))
 	n, err := conn.Read(buffer)
 	if err!=nil{
-		self.ts_states[i] = false
-		// ticket server v fail, do recovery
-		// ...
+		// ticket server v might fail
+		// until next hearbeat to do recovery
 		conn.Close()
 		return
 	}
@@ -241,9 +311,11 @@ func (self *TicketServer) handle(conn net.Conn, i int){
 	}
 	num,_ := strconv.Atoi(info[1])
 	self.ts_counts[i] = num
-	self.ts_states[i] = true
+	self.ts_states[i] = 1
 
-	fmt.Printf("%v, server %d count: %d\n",time.Now(), i, num)
+	conn.Close()
+
+	//fmt.Printf("%v, server %d count: %d\n",time.Now(), i, num)
 }
 
 
@@ -284,7 +356,7 @@ func (self *TicketServer) UpdateTicketCounter() {
 }
 
 func (self *TicketServer) GetFromPool(n int) error {
-	bin := self.Bc.Bin(self.tc.Id)
+	bin := self.Bc.Bin("0") // fixed bin name for all pool access
 	var l storage.List
 
 	e := bin.AccessPool(&storage.KeyValue{Key: "TICKETPOOL", Value: "GET,"+strconv.Itoa(n)}, &l)
@@ -298,14 +370,14 @@ func (self *TicketServer) GetFromPool(n int) error {
 
 	self.tlock.Lock()
 	self.ticket_counter += num
-	// fmt.Printf("%v, %d, %d\n", time.Now(), num, self.ticket_counter)
+	self.WriteToLog(self.tc.Id, strconv.Itoa(self.ticket_counter))
 	self.tlock.Unlock()
 
 	return nil
 }
 
 func (self *TicketServer) PutToPool(n int) error {
-	bin := self.Bc.Bin(self.tc.Id)
+	bin := self.Bc.Bin("0")
 	var l storage.List
 
 	e := bin.AccessPool(&storage.KeyValue{Key: "TICKETPOOL", Value: "PUT,"+strconv.Itoa(n)}, &l)
@@ -316,8 +388,10 @@ func (self *TicketServer) PutToPool(n int) error {
 	// update ticket counter
 	ret := strings.Split(l.L[0], ",")
 	num,_ := strconv.Atoi(ret[2])
+
 	self.tlock.Lock()
 	self.ticket_counter -= num
+	self.WriteToLog(self.tc.Id, strconv.Itoa(self.ticket_counter))
 	self.tlock.Unlock()
 
 	return nil

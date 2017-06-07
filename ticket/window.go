@@ -1,5 +1,8 @@
 package ticket
 
+import (
+	"ticketmonster/storage"
+)
 
 type BuyInfo struct{
 	Uid string
@@ -12,4 +15,7 @@ type Window interface{
 
 	// get current ticket server left tickets
 	GetLeftTickets(useless bool, n *int) error
+
+	// get current left tickets from all ticket server
+	GetAllTickets(useless bool, ret *storage.List) error
 }
