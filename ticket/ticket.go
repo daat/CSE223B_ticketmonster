@@ -106,7 +106,7 @@ func (self *TicketServer) InitPool() error{
 	bin := self.Bc.Bin(self.tc.Id)
 	var succ bool
 	succ = false
-	bin.ListAppend(&storage.KeyValue{Key: "TICKETPOOL", Value: "PUT,20000,20000"}, &succ)
+	bin.ListAppend(&storage.KeyValue{Key: "TICKETPOOL", Value: "PUT,30000,30000"}, &succ)
 	if succ == false{
 		return fmt.Errorf("InitPool fail\n")
 	}
@@ -116,7 +116,7 @@ func (self *TicketServer) InitPool() error{
 	var l storage.List
 	e := bin.AccessPool(&storage.KeyValue{Key: "TICKETPOOL", Value: "GET,0"}, &l)
 	if e!=nil {
-		// 
+		//
 	}
 
 	// update ticket counter
@@ -213,7 +213,7 @@ func (self *TicketServer) listen_func(exit chan bool) {
 
     	words := fmt.Sprintf("%s,%d", self.tc.Id, self.ticket_counter)
     	conn.Write([]byte(words))
-    	
+
 		conn.Close()
 	}
 }
