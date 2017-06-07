@@ -21,6 +21,10 @@ func (self *RC) BackCount() int {
 	return len(self.PrimaryBacks)
 }
 
+func (self *RC) TicketServerCount() int {
+	return len(self.TicketServers_out)
+}
+
 func LoadRC(p string) (*RC, error) {
 	fin, e := os.Open(p)
 	if e != nil {

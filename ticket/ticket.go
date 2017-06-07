@@ -116,6 +116,9 @@ func (self *TicketServer) Init() error {
 
 func (self *TicketServer) InitPool() error{
 	bin := self.Bc.Bin("0")
+	if bin==nil{
+		return fmt.Errorf("initpool nil bin\n")
+	}
 	var succ bool
 	succ = false
 	bin.ListAppend(&storage.KeyValue{Key: "TICKETPOOL", Value: "PUT,50000,50000"}, &succ)

@@ -4,11 +4,12 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"strconv"
+	//"strconv"
+	"time"
 
 	"ticketmonster"
     "ticketmonster/ticket"
-    "ticketmonster/local"
+    //"ticketmonster/local"
 )
 
 var (
@@ -26,45 +27,43 @@ func main() {
 	flag.Parse()
 
 
-	rc, _ := ticketmonster.LoadRC("bins.rc")
+	rc, e := ticketmonster.LoadRC("bins.rc")
+	if e!= nil{
+		log.Printf("%v", e)
+		return 
+	}
 
-	run := func(i int) {
+	run := func(i int, ready chan bool) {
 		if i > len(rc.PrimaryBacks) {
 			noError(fmt.Errorf("back-end index out of range: %d", i))
 		}
+
 		tsConfig := rc.TSConfig(i)
-		ts := ticket.NewTicketServer(tsConfig)
-		noError(ts.InitPool())
-		noError(ts.Init())
+		tsConfig.Ready = ready
+		_ = ticket.NewTicketServer(tsConfig)
 		log.Printf("ticket server serving on %s", rc.TicketServers_out[i])
 	}
+	
+	n := rc.TicketServerCount()
 
-	args := flag.Args()
+	poolready := make(chan bool)
+    go run(0, poolready)
+    if <-poolready{
+        log.Printf("pool ready")
+    }
 
-	n := 0
-	if len(args) == 0 {
-		// scan for addresses on this machine
-		for i, b := range rc.TicketServers_out {
-			if local.Check(b) {
-				go run(i)
-				n++
-			}
-		}
+    ready1 := make(chan bool)
+    for i := 1; i < n; i++ {
+        go run(i, ready1)
+    }
+    for i := 1; i < n; i++ {
+        <- ready1
+    }
 
-		if n == 0 {
-			log.Fatal("no ticketserver found for this host")
-		}
-	} else {
-		// scan for indices for the addresses
-		for _, a := range args {
-			i, e := strconv.Atoi(a)
-			noError(e)
-			go run(i)
-			n++
-		}
-	}
-
-	if n > 0 {
-		select {}
-	}
+	
+	for {
+		time.Sleep(time.Second * 30)
+        log.Print("ticket server running \n")
+        
+    }
 }
