@@ -153,7 +153,6 @@ func (self *TicketServer) BuyTicket(in *BuyInfo, succ *bool) error {
 
 	self.ticket_counter -= in.N
 	self.current_sale += in.N
-    fmt.Println(self.ticket_counter)
 
     //fmt.Printf("%v, Buy %v, %v left\n", time.Now(), in.N, self.ticket_counter)
 	e := self.WriteToLog(self.tc.Id, strconv.Itoa(self.ticket_counter))
@@ -220,7 +219,7 @@ func (self *TicketServer) HeartBeat(exit chan bool){
 			return
 		default:
 			higher_reply := false
-			fmt.Printf("server %s current tickets %d", self.tc.Id, self.ticket_counter)
+			fmt.Printf("server %s current tickets %d\n", self.tc.Id, self.ticket_counter)
 			for i, v := range self.tc.InAddrs {
 				if i == self.tc.This{
 					continue

@@ -13,7 +13,7 @@ import (
 )
 
 func main() {
-    n := 2000
+    n := 15000
     wait := true
     rc, _ := ticketmonster.LoadRC("bins.rc")
     var front client.Front
