@@ -220,6 +220,7 @@ func (self *TicketServer) HeartBeat(exit chan bool){
 			return
 		default:
 			higher_reply := false
+			fmt.Printf("server %s current tickets %d", self.tc.Id, self.ticket_counter)
 			for i, v := range self.tc.InAddrs {
 				if i == self.tc.This{
 					continue
