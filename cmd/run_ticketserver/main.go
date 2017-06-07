@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
-	"time"
+	//"time"
 
 	"ticketmonster"
     "ticketmonster/ticket"
@@ -67,7 +67,6 @@ func main() {
     args := flag.Args()
 
 	n := 0
-	myId := 0
 	if len(args) == 0 {
 		// scan for addresses on this machine
 		for i, b := range rc.TicketServers_out {
@@ -78,9 +77,6 @@ func main() {
 				    if <-poolready{
 				        log.Printf("server %d ready, pool ready", i)
 				    }
-				    if n==0 {
-				    	myId = i
-				    }
 				    n++
 				} else {
 					ready1 := make(chan bool)
@@ -88,9 +84,6 @@ func main() {
 					if <- ready1 {
 						log.Printf("server %d ready", i)
 					}
-					if n==0 {
-				    	myId = i
-				    }
 					n++
 				}
 			}
@@ -109,18 +102,12 @@ func main() {
 			if <- ready1 {
 				log.Printf("server %d ready", i)
 			}
-			if n==0 {
-				myId = i
-			}
 			n++
 		}
 	}
 
-	for {
-		time.Sleep(time.Second * 30)
-		var num int
-		servers[0].GetLeftTickets(true, &num)
-		fmt.Printf("ticketserver %d tickets %d\n", myId, num)
+	if n > 0 {
+		select {}
 	}
 	
 }
