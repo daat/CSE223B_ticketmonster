@@ -30,7 +30,7 @@ func main() {
 	rc, e := ticketmonster.LoadRC("bins.rc")
 	if e!= nil{
 		log.Printf("%v", e)
-		return 
+		return
 	}
 	servers := make([]*ticket.TicketServer, 0, rc.TicketServerCount())
 	run := func(i int, ready chan bool) {
@@ -45,7 +45,7 @@ func main() {
 		servers = append(servers, &ts)
 		log.Printf("ticket server serving on %s", rc.TicketServers_out[i])
 	}
-	
+
 	/*
 	n := rc.TicketServerCount()
 
@@ -122,5 +122,5 @@ func main() {
 		servers[0].GetLeftTickets(true, &num)
 		fmt.Printf("ticketserver %d tickets %d\n", myId, num)
 	}
-	
+
 }

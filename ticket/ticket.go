@@ -7,7 +7,6 @@ import (
 	"strings"
 	"fmt"
 	"net"
-	"net/http"
 	"net/rpc"
 	"time"
 	"ticketmonster/storage"
@@ -101,14 +100,27 @@ func (self *TicketServer) Init() error {
 		return e
 	}
 
-	server := rpc.NewServer()
-	e = server.RegisterName("Window", self)
-	if e != nil {
+	// server := rpc.NewServer()
+	// e = server.RegisterName("Window", self)
+	// if e != nil {
+	// 	return e
+	// }
+
+    rpc.RegisterName("Window", self)
+    if e != nil {
 		return e
 	}
-
-
-	go http.Serve(l, server)
+    go func() {
+        for {
+            conn, err := l.Accept()
+            if err != nil {
+                fmt.Println(err)
+                continue
+            }
+            go rpc.ServeConn(conn)
+        }
+    }()
+	// go http.Serve(l, server)
 	// go self.UpdateTicketCounter()
 	go self.HeartBeat(nil)
 	return nil
@@ -141,6 +153,7 @@ func (self *TicketServer) BuyTicket(in *BuyInfo, succ *bool) error {
 
 	self.ticket_counter -= in.N
 	self.current_sale += in.N
+    fmt.Println(self.ticket_counter)
 
     //fmt.Printf("%v, Buy %v, %v left\n", time.Now(), in.N, self.ticket_counter)
 	e := self.WriteToLog(self.tc.Id, strconv.Itoa(self.ticket_counter))
@@ -198,7 +211,7 @@ func (self *TicketServer) HeartBeat(exit chan bool){
 	listen_exit := make(chan bool)
 	go self.listen_func(listen_exit)
 
-	t := time.NewTicker(time.Second*10) // freq to be adjust
+	t := time.NewTicker(time.Second*1) // freq to be adjust
 
 	for {
 		select {

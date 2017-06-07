@@ -41,7 +41,7 @@ func (self *Front) BuyTicket(in *ticket.BuyInfo, succ *bool) error {
     i := (n + 1) % len(self.clients)
     for i != n {
         v := l.L[i]
-        if v == "-" {
+        if v == "-" || v == "0" {
             continue
         }
         err = self.clients[i].BuyTicket(in, succ)

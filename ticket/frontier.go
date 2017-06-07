@@ -16,7 +16,7 @@ func NewFrontier(addr string) Window{
 
 func (self *Frontier) BuyTicket(in *BuyInfo, succ *bool) error{
 	// connect to the server
-	conn, e := rpc.DialHTTP("tcp", self.addr)
+	conn, e := rpc.Dial("tcp", self.addr)
 	if e != nil {
 		return e
 	}
@@ -33,7 +33,7 @@ func (self *Frontier) BuyTicket(in *BuyInfo, succ *bool) error{
 
 func (self *Frontier) GetLeftTickets(useless bool, n *int) error{
 	// connect to the server
-	conn, e := rpc.DialHTTP("tcp", self.addr)
+	conn, e := rpc.Dial("tcp", self.addr)
 	if e != nil {
 		return e
 	}
@@ -50,7 +50,7 @@ func (self *Frontier) GetLeftTickets(useless bool, n *int) error{
 
 func (self *Frontier) GetAllTickets(useless bool, ret *storage.List) error{
 	// connect to the server
-	conn, e := rpc.DialHTTP("tcp", self.addr)
+	conn, e := rpc.Dial("tcp", self.addr)
 	if e != nil {
 		return e
 	}
@@ -64,4 +64,3 @@ func (self *Frontier) GetAllTickets(useless bool, ret *storage.List) error{
 	// close the connection
 	return conn.Close()
 }
-
