@@ -1,8 +1,10 @@
 package client
 
 import (
-    "ticketmonster/ticket"
     "fmt"
+
+    "ticketmonster/ticket"
+    "ticketmonster/storage"
 )
 
 type Front struct {
@@ -18,9 +20,37 @@ func (self *Front) Init(addrs []string) {
     }
 }
 
+// redirect 
+
 func (self *Front) BuyTicket(in *ticket.BuyInfo, succ *bool) error {
     if len(self.clients) == 0 {
         return fmt.Errorf("no ticket servers")
     }
-    return self.clients[0].BuyTicket(in, succ)
+
+    err := self.clients[0].BuyTicket(in, succ)
+    if err == nil{
+        // buy succeed
+        return nil
+    }
+
+    flag := false
+    var l storage.List
+    self.clients[0].GetAllTickets(true, &l)
+
+    for i,v := range l.L{
+        if v == "-" {
+            continue
+        }
+        err = self.clients[i].BuyTicket(in, succ)
+        if err == nil{
+            flag = true
+            break
+        }
+    }
+
+    if flag {
+        return nil
+    } else {
+        return fmt.Errorf("no ticket left")
+    }
 }

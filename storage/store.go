@@ -229,3 +229,20 @@ func (self *Store) AccessPool(kv *KeyValue, list *List) error {
 	return nil
 
 }
+
+func (self *Store) RecoverTicketServer(server_i int, n int) error {
+	self.listLock.Lock()
+	defer self.listLock.Unlock()
+
+	// get recover log
+	lst, found := self.lists["RECOVERLOG"]
+	if !found {
+		lst = newList()
+		self.lists["RECOVERLOG"] = lst
+	}
+
+	
+
+	return nil
+}
+
