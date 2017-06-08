@@ -27,7 +27,10 @@ func (self *Front) BuyTicket(in *ticket.BuyInfo, succ *bool) error {
         return fmt.Errorf("no ticket servers")
     }
 
-    n := rand.Int()%len(self.clients)
+    // n := rand.Int()%len(self.clients)
+    ns := []int{0,0,1,2}
+    n := ns[rand.Int()%len(ns)]
+
 
     err := self.clients[n].BuyTicket(in, succ)
     if err == nil{
@@ -37,7 +40,10 @@ func (self *Front) BuyTicket(in *ticket.BuyInfo, succ *bool) error {
 
     flag := false
     var l storage.List
-    self.clients[n].GetAllTickets(true, &l)
+    err = self.clients[n].GetAllTickets(true, &l)
+    if err != nil {
+        return err
+    }
     i := (n + 1) % len(self.clients)
     for i != n {
         v := l.L[i]

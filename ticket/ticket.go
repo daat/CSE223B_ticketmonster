@@ -12,7 +12,7 @@ import (
 	"ticketmonster/storage"
 )
 
-const init_tickets = 10000
+const init_tickets = 3000
 
 type TicketServerConfig struct {
 	// The addresses of back-ends
@@ -117,11 +117,13 @@ func (self *TicketServer) Init() error {
                 fmt.Println(err)
                 continue
             }
-            go rpc.ServeConn(conn)
+            go func(c net.Conn) {
+                rpc.ServeConn(c)
+            }(conn)
         }
     }()
 	// go http.Serve(l, server)
-	// go self.UpdateTicketCounter()
+	go self.UpdateTicketCounter()
 	go self.HeartBeat(nil)
 	return nil
 }
@@ -336,7 +338,7 @@ func (self *TicketServer) handle(conn net.Conn, i int){
 
 
 func (self *TicketServer) UpdateTicketCounter() {
-	tick_chan := time.NewTicker(time.Second * 30).C // freq to be adjust
+	tick_chan := time.NewTicker(time.Second * 1).C // freq to be adjust
 
 	for {
 		select {
@@ -354,14 +356,21 @@ func (self *TicketServer) UpdateTicketCounter() {
 					continue
 				}
 
-			} else if t < c {
-				e := self.GetFromPool(c/2)
+			} else if t < 3*c {
+				e := self.GetFromPool(2*c)
 				if e!=nil {
 					continue
 				}
 
-			} else if t > c {
-				e := self.PutToPool(t/2)
+			} else if t > 5*c {
+                if 5*c >= init_tickets {
+                    c = t - 5*c
+                } else if t >= init_tickets {
+                    c = t - init_tickets
+                } else {
+                    continue
+                }
+				e := self.PutToPool(c)
 				if e!=nil {
 					continue
 				}
@@ -386,8 +395,9 @@ func (self *TicketServer) GetFromPool(n int) error {
 
 	self.tlock.Lock()
 	self.ticket_counter += num
-	self.WriteToLog(self.tc.Id, strconv.Itoa(self.ticket_counter))
-	self.tlock.Unlock()
+    t := self.ticket_counter
+    self.tlock.Unlock()
+	self.WriteToLog(self.tc.Id, strconv.Itoa(t))
 
 	return nil
 }
@@ -407,8 +417,10 @@ func (self *TicketServer) PutToPool(n int) error {
 
 	self.tlock.Lock()
 	self.ticket_counter -= num
-	self.WriteToLog(self.tc.Id, strconv.Itoa(self.ticket_counter))
-	self.tlock.Unlock()
+    t := self.ticket_counter
+    self.tlock.Unlock()
+	self.WriteToLog(self.tc.Id, strconv.Itoa(t))
+
 
 	return nil
 }

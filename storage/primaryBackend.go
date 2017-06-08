@@ -15,7 +15,7 @@ type PrimaryBackend struct {
     alive []bool
     moveToPrimary []bool
     moveToBackup []bool
-    store Store
+    store *Store
     backup *BackupBackend
     this int
     statusLock sync.Mutex
@@ -50,7 +50,7 @@ func (self *PrimaryBackend) export(addr string) {
 
 // Serve as a backend based on the given configuration
 func (self *PrimaryBackend) Serve(b *BackConfig) error {
-    self.store = *NewStore()
+    self.store = NewStore()
     self.this = b.This
     self.bc = b
     self.backup = &BackupBackend{store: self.store, primary: self, this: self.this}

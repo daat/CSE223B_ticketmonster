@@ -54,12 +54,19 @@ func (self *Frontier) GetAllTickets(useless bool, ret *storage.List) error{
 	if e != nil {
 		return e
 	}
+
+    ret.L = nil
+
 	// perform the call
 	e = conn.Call("Window.GetAllTickets", useless, ret)
 	if e != nil {
 		conn.Close()
 		return e
 	}
+
+    if ret.L == nil {
+        ret.L = []string{}
+    }
 
 	// close the connection
 	return conn.Close()

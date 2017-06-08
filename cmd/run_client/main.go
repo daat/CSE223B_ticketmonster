@@ -41,8 +41,8 @@ func main() {
     }
 
     exit_ch := make(chan bool)
-    wait_ch := make(chan bool, 1000)
-    ch := make(chan int64, 1000)
+    wait_ch := make(chan bool, 500)
+    ch := make(chan int64, 500)
 
     go func() {
         f, _ := os.Create(fmt.Sprintf("output_%v.txt", id))

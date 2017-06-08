@@ -7,7 +7,7 @@ import (
 )
 
 type BackupBackend struct {
-    store Store
+    store *Store
     primary *PrimaryBackend
     this int
 }
