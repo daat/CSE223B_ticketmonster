@@ -13,6 +13,7 @@ import (
 )
 
 const init_tickets = 3000
+const TOTAL = 30000
 
 type TicketServerConfig struct {
 	// The addresses of back-ends
@@ -45,6 +46,8 @@ type TicketServer struct{
 	// record other ticektserver state
 	ts_counts []int
 	ts_states []int
+	ts_sales  []int
+	ts_total  []int
 
 	// related variables
 	tlock sync.Mutex
@@ -83,9 +86,13 @@ func (self *TicketServer) Init() error {
 
 	self.ts_counts = make([]int, len(self.tc.InAddrs))
 	self.ts_states = make([]int, len(self.tc.InAddrs))
+	self.ts_sales  = make([]int, len(self.tc.InAddrs))
+	self.ts_total  = make([]int, len(self.tc.InAddrs))
 	for i,_ := range self.tc.InAddrs {
 		self.ts_counts[i] = 0
 		self.ts_states[i] = -1
+		self.ts_sales[i]  = 0
+		self.ts_total[i] = 0
 	}
 
 	// start listening for inside connection
@@ -256,7 +263,7 @@ func (self *TicketServer) HeartBeat(exit chan bool){
 			return
 		default:
 			higher_reply := false
-			fmt.Printf("server %s current tickets %d\n", self.tc.Id, self.ticket_counter)
+			fmt.Printf("server %s: current tickets %d, total sale %d\n", self.tc.Id, self.ticket_counter, self.total_sale)
 			for i, v := range self.tc.InAddrs {
 				if i == self.tc.This{
 					continue
@@ -335,7 +342,7 @@ func (self *TicketServer) listen_func(exit chan bool) {
 			break
 		}
 
-    	words := fmt.Sprintf("%s,%d", self.tc.Id, self.ticket_counter)
+    	words := fmt.Sprintf("%s,%d,%d,%d", self.tc.Id, self.ticket_counter, self.current_sale, self.total_sale)
     	conn.Write([]byte(words))
 
 		conn.Close()
@@ -354,7 +361,7 @@ func (self *TicketServer) handle(conn net.Conn, i int){
 	}
 
 	info := strings.Split(string(buffer[:n]), ",")
-	if len(info)!=2 {
+	if len(info)!=4 {
 		conn.Close()
 		return
 	}
@@ -363,8 +370,12 @@ func (self *TicketServer) handle(conn net.Conn, i int){
 		return
 	}
 	num,_ := strconv.Atoi(info[1])
+	s,_ := strconv.Atoi(info[2])
+	t,_ := strconv.Atoi(info[3])
 	self.ts_counts[i] = num
 	self.ts_states[i] = 1
+	self.ts_sales[i] = s
+	self.ts_total[i] = t
 
 	conn.Close()
 
@@ -381,6 +392,7 @@ func (self *TicketServer) UpdateTicketCounter() {
 			self.tlock.Lock()
 			c := self.current_sale
 			t := self.ticket_counter
+			mytotal := self.total_sale
 			self.current_sale = 0
 			self.tlock.Unlock()
 
@@ -391,20 +403,47 @@ func (self *TicketServer) UpdateTicketCounter() {
 					continue
 				}
 
-			} else if t < 3*c {
-				e := self.GetFromPool(2*c)
+			} else if 4*c > init_tickets {
+				// count for share
+				sum := 0
+				for i,v := range self.ts_sales {
+					if i==self.tc.This {
+						sum += c
+					} else {
+						sum += v
+					}
+				}
+				estimate_total := TOTAL
+				for i,v := range self.ts_total {
+					if i==self.tc.This {
+						estimate_total -= mytotal
+					} else {
+						estimate_total -= v
+					}
+				}
+				share := 0
+				if c > 8*sum/10 {
+					share = 3*c
+				} else {
+					if estimate_total < 5000 {
+						share = estimate_total * c / sum
+					} else if estimate_total < 15000 {
+						share = estimate_total * c / sum /2 
+					} else {
+						share = estimate_total *c / sum /4
+					}
+					
+				}
+				// get tickets
+				e := self.GetFromPool(share)
 				if e!=nil {
 					continue
 				}
 
-			} else if t > 5*c {
-                if 5*c >= init_tickets {
-                    c = t - 5*c
-                } else if t >= init_tickets {
-                    c = t - init_tickets
-                } else {
-                    continue
-                }
+			} else if 6*c < init_tickets {
+				if t <= init_tickets{
+					continue
+				}
 				e := self.PutToPool(c)
 				if e!=nil {
 					continue
@@ -458,4 +497,20 @@ func (self *TicketServer) PutToPool(n int) error {
 
 
 	return nil
+}
+
+func (self *TicketServer) GetPoolTickets() int {
+	bin := self.Bc.Bin("0")
+	var l storage.List
+
+	e := bin.AccessPool(&storage.KeyValue{Key: "TICKETPOOL", Value: "PUT,0"}, &l)
+	if e!=nil {
+		return 0
+	}
+
+	// update ticket counter
+	ret := strings.Split(l.L[0], ",")
+	n_pool, _ := strconv.Atoi(ret[3])
+
+	return n_pool
 }
