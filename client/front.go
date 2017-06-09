@@ -28,7 +28,7 @@ func (self *Front) BuyTicket(in *ticket.BuyInfo, succ *bool) error {
     }
 
     // n := rand.Int()%len(self.clients)
-    ns := []int{0,1,2}
+    ns := []int{0,0,1,2}
     n := ns[rand.Int()%len(ns)]
 
 
