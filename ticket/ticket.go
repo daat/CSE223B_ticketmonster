@@ -7,7 +7,7 @@ import (
 	"strings"
 	"fmt"
 	"net"
-	"net/rpc"
+	"encoding/gob"
 	"time"
 	"ticketmonster/storage"
 )
@@ -106,10 +106,7 @@ func (self *TicketServer) Init() error {
 	// 	return e
 	// }
 
-    rpc.RegisterName("Window", self)
-    if e != nil {
-		return e
-	}
+    // rpc.RegisterName("Window", self)
     go func() {
         for {
             conn, err := l.Accept()
@@ -117,9 +114,37 @@ func (self *TicketServer) Init() error {
                 fmt.Println(err)
                 continue
             }
-            go func(c net.Conn) {
-                rpc.ServeConn(c)
-            }(conn)
+            go func(ts *TicketServer, c net.Conn) {
+                dec := gob.NewDecoder(c)
+                enc := gob.NewEncoder(c)
+                req := storage.Request{}
+                res := storage.Response{}
+                e := dec.Decode(&req)
+                if e != nil {
+                    return
+                }
+                if req.OP == "BuyTicket" {
+                    var n int
+                    fmt.Sscanf(req.KV.Value, "%d", &n)
+                    e = ts.BuyTicket(&BuyInfo{Uid: req.KV.Key, N: n}, &res.Succ)
+                } else if req.OP == "GetLeftTickets" {
+                    var n int
+                    e = ts.GetLeftTickets(true, &n)
+                    res.L.L = []string{fmt.Sprintf("%v", n)}
+                } else if req.OP == "GetAllTickets" {
+                    e = ts.GetAllTickets(true, &res.L)
+                } else {
+                    e = fmt.Errorf("no such operation")
+                }
+                if e != nil {
+                    res.Err = e.Error()
+                }
+                e = enc.Encode(res)
+                if e != nil {
+                    fmt.Println(e)
+                }
+                c.Close()
+            }(self, conn)
         }
     }()
 	// go http.Serve(l, server)
