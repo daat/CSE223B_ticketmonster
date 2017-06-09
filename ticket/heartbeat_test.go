@@ -61,7 +61,7 @@ func TestHeartBeat(t *testing.T) {
         } else {
             log.Printf("ticket server on %s init failed", ret.OutAddr)
         }
-        
+
     }
 
 
@@ -116,7 +116,7 @@ func TestHeartBeat(t *testing.T) {
     }
     log.Printf("ticket server all serving")
 
-    time.Sleep(time.Minute * 1)
+    time.Sleep(time.Second * 2)
 
     var l storage.List
 

@@ -1,8 +1,10 @@
 package ticket
 
 import (
-	"net/rpc"
+	"net"
+    "encoding/gob"
 	"ticketmonster/storage"
+    "fmt"
 )
 
 type Frontier struct {
@@ -15,61 +17,88 @@ func NewFrontier(addr string) Window{
 }
 
 func (self *Frontier) BuyTicket(in *BuyInfo, succ *bool) error{
-	// connect to the server
-	conn, e := rpc.Dial("tcp", self.addr)
-	if e != nil {
-		return e
-	}
-	// perform the call
-	e = conn.Call("Window.BuyTicket", in, succ)
-	if e != nil {
-		conn.Close()
-		return e
-	}
-
-	// close the connection
-	return conn.Close()
+    req := storage.Request{OP: "BuyTicket", KV: &storage.KeyValue{Key: in.Uid, Value: fmt.Sprintf("%v", in.N)}}
+    conn, e := net.Dial("tcp", self.addr)
+    if e != nil {
+        conn.Close()
+        return e
+    }
+    dec := gob.NewDecoder(conn)
+    enc := gob.NewEncoder(conn)
+    e = enc.Encode(req)
+    if e != nil {
+        return e
+    }
+    res := storage.Response{}
+    e = dec.Decode(&res)
+    if e != nil {
+        conn.Close()
+        return e
+    }
+    if res.Err != "" {
+        conn.Close()
+        return fmt.Errorf(res.Err)
+    }
+    *succ = res.Succ
+    return conn.Close()
 }
 
 func (self *Frontier) GetLeftTickets(useless bool, n *int) error{
-	// connect to the server
-	conn, e := rpc.Dial("tcp", self.addr)
-	if e != nil {
-		return e
-	}
-	// perform the call
-	e = conn.Call("Window.GetLeftTickets", useless, n)
-	if e != nil {
-		conn.Close()
-		return e
-	}
-
-	// close the connection
-	return conn.Close()
+    req := storage.Request{OP: "GetLeftTickets"}
+    conn, e := net.Dial("tcp", self.addr)
+    if e != nil {
+        return e
+    }
+    dec := gob.NewDecoder(conn)
+    enc := gob.NewEncoder(conn)
+    e = enc.Encode(req)
+    if e != nil {
+        conn.Close()
+        return e
+    }
+    res := storage.Response{}
+    e = dec.Decode(&res)
+    if e != nil {
+        conn.Close()
+        return e
+    }
+    if res.Err != "" {
+        conn.Close()
+        return fmt.Errorf(res.Err)
+    }
+    fmt.Sscanf(res.L.L[0], "%v", n)
+    return conn.Close()
 }
 
 func (self *Frontier) GetAllTickets(useless bool, ret *storage.List) error{
-	// connect to the server
-	conn, e := rpc.Dial("tcp", self.addr)
-	if e != nil {
-		return e
-	}
-
-    ret.L = nil
-
-	// perform the call
-	e = conn.Call("Window.GetAllTickets", useless, ret)
-	if e != nil {
-		conn.Close()
-		return e
-	}
-
-    if ret.L == nil {
-        ret.L = []string{}
+    req := storage.Request{OP: "GetAllTickets"}
+    conn, e := net.Dial("tcp", self.addr)
+    if e != nil {
+        return e
     }
-
-	// close the connection
-	return conn.Close()
+    dec := gob.NewDecoder(conn)
+    enc := gob.NewEncoder(conn)
+    e = enc.Encode(req)
+    if e != nil {
+        conn.Close()
+        return e
+    }
+    res := storage.Response{}
+    res.L.L = nil
+    e = dec.Decode(&res)
+    if e != nil {
+        conn.Close()
+        return e
+    }
+    if res.Err != "" {
+        conn.Close()
+        return fmt.Errorf(res.Err)
+    }
+    if res.L.L == nil {
+        res.L.L = []string{}
+    }
+    ret.L = res.L.L
+    return conn.Close()
 }
 
 
