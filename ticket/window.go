@@ -18,4 +18,8 @@ type Window interface{
 
 	// get current left tickets from all ticket server
 	GetAllTickets(useless bool, ret *storage.List) error
+
+	// get current ticket server left tickets
+	GetTotalSale(useless bool, n *int) error
 }
+

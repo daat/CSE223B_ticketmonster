@@ -129,4 +129,8 @@ func TestHeartBeat(t *testing.T) {
     for i, v := range l.L{
         fmt.Printf("%d: %s\n", i, v)
     }
+
+    ss := 0
+    servers[0].GetTotalSale(true, &ss)
+    fmt.Printf("Sell: %d \n", ss)
 }

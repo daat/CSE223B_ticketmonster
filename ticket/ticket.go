@@ -50,6 +50,7 @@ type TicketServer struct{
 	tlock sync.Mutex
 	ticket_counter int
 	current_sale int
+	total_sale int
 }
 
 // TODO:
@@ -74,6 +75,7 @@ func (self *TicketServer) Init() error {
 	self.tlock.Lock()
 	self.ticket_counter = 0
 	self.current_sale = 0
+	self.total_sale = 0
 	self.tlock.Unlock()
 
 	self.GetFromPool(init_tickets)
@@ -180,6 +182,7 @@ func (self *TicketServer) BuyTicket(in *BuyInfo, succ *bool) error {
 
 	self.ticket_counter -= in.N
 	self.current_sale += in.N
+	self.total_sale += in.N
 
     //fmt.Printf("%v, Buy %v, %v left\n", time.Now(), in.N, self.ticket_counter)
 	e := self.WriteToLog(self.tc.Id, strconv.Itoa(self.ticket_counter))
@@ -212,7 +215,7 @@ func (self *TicketServer) GetLeftTickets(useless bool, n *int) error {
 	return nil
 }
 
-func (self *TicketServer) GetAllTickets(useloss bool, ret *storage.List) error {
+func (self *TicketServer) GetAllTickets(useless bool, ret *storage.List) error {
 	l := make([]string, 0, len(self.tc.InAddrs))
 	for i, n := range self.ts_counts {
 		if i == self.tc.This {
@@ -224,6 +227,13 @@ func (self *TicketServer) GetAllTickets(useloss bool, ret *storage.List) error {
 		}
 	}
 	ret.L = l
+	return nil
+}
+
+func (self *TicketServer) GetTotalSale(useless bool, n *int) error {
+	self.tlock.Lock()
+	*n = self.total_sale
+	self.tlock.Unlock()
 	return nil
 }
 
