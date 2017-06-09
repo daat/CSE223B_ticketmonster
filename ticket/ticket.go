@@ -47,6 +47,7 @@ type TicketServer struct{
 	ts_counts []int
 	ts_states []int
 	ts_sales  []int
+	ts_total  []int
 
 	// related variables
 	tlock sync.Mutex
@@ -86,10 +87,12 @@ func (self *TicketServer) Init() error {
 	self.ts_counts = make([]int, len(self.tc.InAddrs))
 	self.ts_states = make([]int, len(self.tc.InAddrs))
 	self.ts_sales  = make([]int, len(self.tc.InAddrs))
+	self.ts_total  = make([]int, len(self.tc.InAddrs))
 	for i,_ := range self.tc.InAddrs {
 		self.ts_counts[i] = 0
 		self.ts_states[i] = -1
 		self.ts_sales[i]  = 0
+		self.ts_total[i] = 0
 	}
 
 	// start listening for inside connection
@@ -339,7 +342,7 @@ func (self *TicketServer) listen_func(exit chan bool) {
 			break
 		}
 
-    	words := fmt.Sprintf("%s,%d,%d", self.tc.Id, self.ticket_counter, self.total_sale)
+    	words := fmt.Sprintf("%s,%d,%d,%d", self.tc.Id, self.ticket_counter, self.current_sale, self.total_sale)
     	conn.Write([]byte(words))
 
 		conn.Close()
@@ -358,7 +361,7 @@ func (self *TicketServer) handle(conn net.Conn, i int){
 	}
 
 	info := strings.Split(string(buffer[:n]), ",")
-	if len(info)!=3 {
+	if len(info)!=4 {
 		conn.Close()
 		return
 	}
@@ -368,9 +371,11 @@ func (self *TicketServer) handle(conn net.Conn, i int){
 	}
 	num,_ := strconv.Atoi(info[1])
 	s,_ := strconv.Atoi(info[2])
+	t,_ := strconv.Atoi(info[3])
 	self.ts_counts[i] = num
 	self.ts_states[i] = 1
 	self.ts_sales[i] = s
+	self.ts_total[i] = t
 
 	conn.Close()
 
@@ -398,24 +403,36 @@ func (self *TicketServer) UpdateTicketCounter() {
 					continue
 				}
 
-			} else if 3*c > init_tickets {
+			} else if 4*c > init_tickets {
 				// count for share
 				sum := 0
-				estimate_total := TOTAL
 				for i,v := range self.ts_sales {
 					if i==self.tc.This {
-						estimate_total -= mytotal
-						sum += mytotal
+						sum += c
 					} else {
-						estimate_total -= v
 						sum += v
 					}
 				}
+				estimate_total := TOTAL
+				for i,v := range self.ts_total {
+					if i==self.tc.This {
+						estimate_total -= mytotal
+					} else {
+						estimate_total -= v
+					}
+				}
 				share := 0
-				if mytotal > 8*sum/10 {
+				if c > 8*sum/10 {
 					share = 3*c
 				} else {
-					share = estimate_total * mytotal / sum
+					if estimate_total < 5000 {
+						share = estimate_total * c / sum
+					} else if estimate_total < 15000 {
+						share = estimate_total * c / sum /2 
+					} else {
+						share = estimate_total *c / sum /4
+					}
+					
 				}
 				// get tickets
 				e := self.GetFromPool(share)
@@ -423,7 +440,7 @@ func (self *TicketServer) UpdateTicketCounter() {
 					continue
 				}
 
-			} else if 5*c < init_tickets {
+			} else if 6*c < init_tickets {
 				if t <= init_tickets{
 					continue
 				}

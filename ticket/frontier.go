@@ -102,20 +102,4 @@ func (self *Frontier) GetAllTickets(useless bool, ret *storage.List) error{
 }
 
 
-func (self *Frontier) GetTotalSale(useless bool, n *int) error{
-	// connect to the server
-	conn, e := rpc.Dial("tcp", self.addr)
-	if e != nil {
-		return e
-	}
-	// perform the call
-	e = conn.Call("Window.GetTotalSale", useless, n)
-	if e != nil {
-		conn.Close()
-		return e
-	}
-
-	// close the connection
-	return conn.Close()
-}
 
