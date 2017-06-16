@@ -428,11 +428,11 @@ func (self *TicketServer) UpdateTicketCounter() {
 					if estimate_total < 5000 {
 						share = estimate_total * c / sum
 					} else if estimate_total < 15000 {
-						share = estimate_total * c / sum /2 
+						share = estimate_total * c / sum /2
 					} else {
 						share = estimate_total *c / sum /4
 					}
-					
+
 				}
 				// get tickets
 				e := self.GetFromPool(share)
